@@ -82,6 +82,8 @@ public final class DefaultDesignAtlasResolver implements DesignAtlasResolver {
         private final Map<AtlasId, AtlasRelation> relations = new LinkedHashMap<>();
         private final List<AtlasDiagnostic> diagnostics = new ArrayList<>();
         private final Map<String, List<SourceFact>> factsBySubject;
+        private final Map<String, AtlasId> persistenceEntityTargets = new LinkedHashMap<>();
+        private final Map<String, AtlasId> persistenceTableTargets = new LinkedHashMap<>();
 
         private ResolutionState(FactBundle facts) {
             this.facts = facts;
@@ -118,6 +120,140 @@ public final class DefaultDesignAtlasResolver implements DesignAtlasResolver {
             addCommandDispatches();
             addProcessLifecycle();
             addProcessDispatches();
+            addJpaPersistenceTargets();
+            addProjectionWrites();
+        }
+
+        /**
+         * 将 JPA 的源码映射事实归一为可被业务和运维界面直接阅读的数据目标。
+         *
+         * <p>实体本身可作为可靠的数据可见性边界；物理表和列仅在 {@code @Table}/{@code @Column} 中以字面量
+         * 明确出现时才创建。因此读取 Atlas 的人能明确区分“已知实体”与“已知真实表/列”，不会把框架命名策略
+         * 误解成源码已经证明的事实。</p>
+         */
+        private void addJpaPersistenceTargets() {
+            for (SourceFact fact : facts.facts()) {
+                if (fact.kind() == FactKind.PERSISTENCE_ENTITY) {
+                    String entityType = text(fact.attributes(), "entityType").orElse(fact.subject());
+                    persistenceEntityFor(entityType, fact);
+                }
+            }
+            // Fact Bundle 的稳定排序不等同于业务依赖顺序；先建立表，才能以确定方式把列放入表中。
+            facts.facts().stream().filter(fact -> fact.kind() == FactKind.PERSISTENCE_TABLE).forEach(this::addPersistenceTable);
+            facts.facts().stream().filter(fact -> fact.kind() == FactKind.PERSISTENCE_COLUMN).forEach(this::addPersistenceColumn);
+            facts.facts().stream().filter(fact -> fact.kind() == FactKind.REPOSITORY).forEach(this::addRepositoryBinding);
+        }
+
+        private void addProjectionWrites() {
+            for (SourceFact fact : facts.facts()) {
+                if (fact.kind() != FactKind.PROJECTION_WRITE) {
+                    continue;
+                }
+                String projectionType = text(fact.attributes(), "projectionType").orElse(null);
+                String entityType = text(fact.attributes(), "entityType").orElse(null);
+                if (projectionType == null || entityType == null) {
+                    continue;
+                }
+                AtlasId projectionCodeId = ensureCodeElement(projectionType, CodeElementKind.TYPE, fact.evidence());
+                Projection projection = projectionFor(projectionType, projectionCodeId, fact);
+                DataTarget entity = persistenceEntityFor(entityType, fact);
+                addRelation(RelationKind.PROJECTS_TO, projection.id(), entity.id(), fact.evidence(), fact.attributes(),
+                        "projects-to-entity:" + projection.id() + ":" + entity.id() + ":" + fact.id());
+
+                AtlasId tableId = persistenceTableTargets.get(entityType);
+                if (tableId != null) {
+                    addRelation(RelationKind.WRITES_TO, projection.id(), tableId, fact.evidence(), fact.attributes(),
+                            "projection-writes-to-table:" + projection.id() + ":" + tableId + ":" + fact.id());
+                }
+                text(fact.attributes(), "repositoryType").ifPresent(repositoryType -> {
+                    AtlasId repositoryCodeId = ensureCodeElement(repositoryType, CodeElementKind.TYPE, fact.evidence());
+                    addRelation(RelationKind.DEPENDS_ON, projection.id(), repositoryCodeId, fact.evidence(), fact.attributes(),
+                            "projection-depends-on-repository:" + projection.id() + ":" + repositoryCodeId + ":" + fact.id());
+                });
+            }
+        }
+
+        private DataTarget persistenceEntityFor(String entityType, SourceFact fact) {
+            AtlasId id = persistenceEntityTargets.computeIfAbsent(entityType,
+                    type -> AtlasId.of("derived:data-target:persistence-entity:" + encode(type)));
+            ArchitectureAsset existing = nodes.get(id);
+            if (existing instanceof DataTarget dataTarget) {
+                return dataTarget;
+            }
+            AtlasId codeId = ensureCodeElement(entityType, CodeElementKind.TYPE, fact.evidence());
+            Map<String, AtlasValue> attributes = new LinkedHashMap<>();
+            attributes.put("entityType", AtlasValue.text(entityType));
+            text(fact.attributes(), "entityName").ifPresent(name -> attributes.put("entityName", AtlasValue.text(name)));
+            attributes.put("derivedFromFact", AtlasValue.text(fact.id().value()));
+            DataTarget target = new DataTarget(
+                    new AssetMetadata(id, simpleName(entityType), attributes, fact.evidence()),
+                    DataTargetKind.PERSISTENCE_ENTITY);
+            putNode(target);
+            addRelation(RelationKind.REPRESENTS, target.id(), codeId, fact.evidence(),
+                    "persistence-entity-represents:" + target.id() + ":" + codeId);
+            return target;
+        }
+
+        private void addPersistenceTable(SourceFact fact) {
+            String entityType = text(fact.attributes(), "entityType").orElse(null);
+            String tableName = text(fact.attributes(), "tableName").orElse(null);
+            if (entityType == null || tableName == null) {
+                return;
+            }
+            DataTarget entity = persistenceEntityFor(entityType, fact);
+            String schema = text(fact.attributes(), "schema").orElse("");
+            AtlasId tableId = AtlasId.of("derived:data-target:database-table:" + encode(entityType + ":" + schema + ":" + tableName));
+            persistenceTableTargets.putIfAbsent(entityType, tableId);
+            if (!nodes.containsKey(tableId)) {
+                Map<String, AtlasValue> attributes = new LinkedHashMap<>();
+                attributes.put("entityType", AtlasValue.text(entityType));
+                attributes.put("tableName", AtlasValue.text(tableName));
+                if (!schema.isBlank()) {
+                    attributes.put("schema", AtlasValue.text(schema));
+                }
+                attributes.put("derivedFromFact", AtlasValue.text(fact.id().value()));
+                putNode(new DataTarget(
+                        new AssetMetadata(tableId, schema.isBlank() ? tableName : schema + "." + tableName,
+                                attributes, fact.evidence()),
+                        DataTargetKind.DATABASE_TABLE));
+            }
+            addRelation(RelationKind.WRITES_TO, entity.id(), tableId, fact.evidence(), fact.attributes(),
+                    "persistence-entity-writes-to-table:" + entity.id() + ":" + tableId + ":" + fact.id());
+        }
+
+        private void addPersistenceColumn(SourceFact fact) {
+            String entityType = text(fact.attributes(), "entityType").orElse(null);
+            String propertyName = text(fact.attributes(), "propertyName").orElse(null);
+            String columnName = text(fact.attributes(), "columnName").orElse(null);
+            AtlasId tableId = entityType == null ? null : persistenceTableTargets.get(entityType);
+            if (entityType == null || propertyName == null || columnName == null || tableId == null) {
+                return;
+            }
+            AtlasId columnId = AtlasId.of("derived:data-target:database-column:" + encode(entityType + ":" + columnName));
+            if (!nodes.containsKey(columnId)) {
+                Map<String, AtlasValue> attributes = new LinkedHashMap<>(fact.attributes());
+                attributes.put("derivedFromFact", AtlasValue.text(fact.id().value()));
+                putNode(new DataTarget(
+                        new AssetMetadata(columnId, columnName, attributes, fact.evidence()),
+                        DataTargetKind.DATABASE_COLUMN));
+            }
+            addRelation(RelationKind.CONTAINS, tableId, columnId, fact.evidence(), fact.attributes(),
+                    "database-table-contains-column:" + tableId + ":" + columnId + ":" + fact.id());
+            AtlasId fieldCodeId = ensureCodeElement(entityType + "#" + propertyName, CodeElementKind.FIELD, fact.evidence());
+            addRelation(RelationKind.REPRESENTS, nodes.get(columnId).id(), fieldCodeId, fact.evidence(),
+                    "database-column-represents-field:" + columnId + ":" + fieldCodeId);
+        }
+
+        private void addRepositoryBinding(SourceFact fact) {
+            String repositoryType = text(fact.attributes(), "repositoryType").orElse(null);
+            String entityType = text(fact.attributes(), "entityType").orElse(null);
+            if (repositoryType == null || entityType == null) {
+                return;
+            }
+            AtlasId repositoryCodeId = ensureCodeElement(repositoryType, CodeElementKind.TYPE, fact.evidence());
+            DataTarget entity = persistenceEntityFor(entityType, fact);
+            addRelation(RelationKind.DEPENDS_ON, repositoryCodeId, entity.id(), fact.evidence(), fact.attributes(),
+                    "repository-depends-on-persistence-entity:" + repositoryCodeId + ":" + entity.id() + ":" + fact.id());
         }
 
         private void addHttpEndpoints() {

@@ -10,8 +10,14 @@ import org.axonframework.eventhandling.EventHandler;
         purpose = "为使用者提供订单已创建状态的快速查询视图。")
 public final class OrderSummaryProjection {
 
+    private final OrderSummaryRepository orderSummaryRepository;
+
+    public OrderSummaryProjection(OrderSummaryRepository orderSummaryRepository) {
+        this.orderSummaryRepository = orderSummaryRepository;
+    }
+
     @EventHandler
     public void on(OrderCreated event) {
-        // 此夹具只验证静态投影关系，不接入任何实际存储。
+        orderSummaryRepository.save(new OrderSummaryEntity(event.orderId(), event.createdAt()));
     }
 }

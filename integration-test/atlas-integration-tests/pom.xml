@@ -12,6 +12,7 @@
         <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-maven-source</artifactId><version>${project.version}</version><scope>test</scope></dependency>
         <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-spring-source</artifactId><version>${project.version}</version><scope>test</scope></dependency>
         <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-axon-source</artifactId><version>${project.version}</version><scope>test</scope></dependency>
+        <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-jpa-target-resolver</artifactId><version>${project.version}</version><scope>test</scope></dependency>
         <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-file-store</artifactId><version>${project.version}</version><scope>test</scope></dependency>
         <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-fixture-strict-explicit-java</artifactId><version>${project.version}</version><scope>test</scope></dependency>
     </dependencies>

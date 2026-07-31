@@ -10,7 +10,7 @@ Atlas 不绑定任何特定业务仓库、行业或实现项目。它面向所�
 
 ## 工程实施与文档
 
-当前仓库已经落下可执行的 Maven Reactor 工程骨架：领域模型、应用 API/Core、分析 SPI、JVM/Maven/Spring/Axon/JPA 适配器、Axon 运行态入口、源码归档读取器、注解 API、编译处理器、Maven Plugin、CLI、HTTP 边界与服务组合根均有独立模块和最小可编译实现。通用 fixture 会在编译期生成 `atlas-intent.json`，CI 同时校验 Maven、独立 Web 与目录边界。
+当前仓库已经落下可执行的 Maven Reactor 工程：领域模型、应用 API/Core、分析 SPI、JVM/Maven/Spring/Axon/JPA 适配器、Axon 运行态入口、源码归档读取器、注解 API、编译处理器、Maven Plugin、CLI、HTTP 边界与服务组合根均有独立模块。JPA 适配器已经能把实体、显式表/列、Spring Data Repository 与投影的写入调用归一为可追溯的 `Projection → Entity → Table` 关系；通用 fixture 会在编译期生成 `atlas-intent.json`，CI 同时校验 Maven、独立 Web 与目录边界。
 
 其中可复用的非渲染能力以 Maven 工件发布；`atlas-web` 保持独立 Node/Web 工程；真实项目路径、源码归档、运行态观测、凭据和业务内容只能放在 Git 忽略的 `workspace/local/` 或外部安全系统。完整目录、发布、依赖、数据包、注解和开发说明见 [工程文档](docs/README.md)。
 

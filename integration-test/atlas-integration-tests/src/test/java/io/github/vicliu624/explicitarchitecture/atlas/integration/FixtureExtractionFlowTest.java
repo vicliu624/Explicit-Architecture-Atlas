@@ -10,12 +10,15 @@ import io.github.vicliu624.explicitarchitecture.atlas.domain.CapabilityStatus;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.CodeElement;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.ContentBundle;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.ConventionProfile;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.DataTarget;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.DataTargetKind;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.DomainConstraint;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.DomainEvent;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.EvidenceOrigin;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.EndpointOperation;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.RelationKind;
 import io.github.vicliu624.explicitarchitecture.atlas.source.axon.AxonSourceFactsAnalyzer;
+import io.github.vicliu624.explicitarchitecture.atlas.source.jpa.JpaProjectionTargetResolver;
 import io.github.vicliu624.explicitarchitecture.atlas.source.jvm.JvmSourceFactsAnalyzer;
 import io.github.vicliu624.explicitarchitecture.atlas.source.maven.MavenSourceFactsAnalyzer;
 import io.github.vicliu624.explicitarchitecture.atlas.source.spring.SpringSourceFactsAnalyzer;
@@ -51,7 +54,8 @@ class FixtureExtractionFlowTest {
                         new MavenSourceFactsAnalyzer(),
                         new JvmSourceFactsAnalyzer(),
                         new SpringSourceFactsAnalyzer(),
-                        new AxonSourceFactsAnalyzer()),
+                        new AxonSourceFactsAnalyzer(),
+                        new JpaProjectionTargetResolver()),
                 new DefaultDesignAtlasResolver())
                 .build(new AtlasBuildRequest(
                         AtlasId.of("package:fixture:integration"),
@@ -95,6 +99,15 @@ class FixtureExtractionFlowTest {
         DomainEvent orderCompleted = event(atlasPackage, "sample-order-completed");
         assertTrue(hasRelation(atlasPackage, RelationKind.WAITS_FOR, "sample-order-completion", orderCompleted.id().value()));
         assertTrue(hasRelation(atlasPackage, RelationKind.COMPLETES, "sample-order-completion", orderCompleted.id().value()));
+
+        DataTarget orderSummaryEntity = dataTarget(atlasPackage, DataTargetKind.PERSISTENCE_ENTITY, "entityType", "example.atlasfixture.OrderSummaryEntity");
+        DataTarget orderSummaryTable = dataTarget(atlasPackage, DataTargetKind.DATABASE_TABLE, "tableName", "order_summary");
+        DataTarget orderIdColumn = dataTarget(atlasPackage, DataTargetKind.DATABASE_COLUMN, "columnName", "order_id");
+        assertEquals("query", ((AtlasValue.Text) orderSummaryTable.attributes().get("schema")).value());
+        assertTrue(hasRelation(atlasPackage, RelationKind.PROJECTS_TO, "sample-order-summary", orderSummaryEntity.id().value()));
+        assertTrue(hasRelation(atlasPackage, RelationKind.WRITES_TO, "sample-order-summary", orderSummaryTable.id().value()));
+        assertTrue(hasRelation(atlasPackage, RelationKind.WRITES_TO, orderSummaryEntity.id().value(), orderSummaryTable.id().value()));
+        assertTrue(hasRelation(atlasPackage, RelationKind.CONTAINS, orderSummaryTable.id().value(), orderIdColumn.id().value()));
         assertEquals(atlasPackage.manifest().packageId(), repository.findById(atlasPackage.manifest().packageId()).orElseThrow().manifest().packageId());
     }
 
@@ -103,6 +116,16 @@ class FixtureExtractionFlowTest {
                 .filter(DomainEvent.class::isInstance)
                 .map(DomainEvent.class::cast)
                 .filter(node -> node.id().value().equals(id))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static DataTarget dataTarget(AtlasPackage atlasPackage, DataTargetKind kind, String attribute, String value) {
+        return atlasPackage.designAtlas().nodes().stream()
+                .filter(DataTarget.class::isInstance)
+                .map(DataTarget.class::cast)
+                .filter(node -> node.targetKind() == kind)
+                .filter(node -> node.attributes().get(attribute) instanceof AtlasValue.Text text && text.value().equals(value))
                 .findFirst()
                 .orElseThrow();
     }
