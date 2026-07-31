@@ -1,0 +1,26 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify Maven Reactor
+        run: mvn -B verify
+      - name: Verify web shell syntax
+        run: npm --prefix ui-layer/atlas-web run check
+      - name: Verify repository structure
+        shell: pwsh
+        run: ./scripts/verify-structure.ps1

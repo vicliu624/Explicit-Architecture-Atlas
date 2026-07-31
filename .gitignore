@@ -1,0 +1,19 @@
+# Maven 与 Java 构建产物
+**/target/
+*.class
+
+# Web 构建与本地依赖
+ui-layer/atlas-web/node_modules/
+ui-layer/atlas-web/dist/
+
+# 本机私有 Workspace：可能包含受限源码、运行观测和业务内容，禁止提交
+workspace/local/
+
+# IDE 与操作系统文件
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,12 @@
+schemaVersion: "0.1.0"
+projectId: "strict-explicit-java-sample"
+content:
+  - assetId: "sample-order-id-format"
+    audience: "BUSINESS"
+    title: "订单身份格式"
+    explanation: "订单身份采用稳定的前缀与流水号格式，避免错误身份进入后续事件处理。"
+    actionWhenViolated: "核对业务来源和编号格式后重新提交。"
+  - assetId: "sample-order-created"
+    audience: "OPS"
+    title: "样例订单已创建事件"
+    explanation: "该事件表示订单身份已通过基本校验，可继续观察下游投影和自动流程。"

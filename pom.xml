@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.github.vicliu624.explicitarchitecture</groupId>
+    <artifactId>explicit-architecture-atlas</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Explicit Architecture Atlas</name>
+    <description>Explicit Architecture 的领域、事件、投影、流程和接口知识图谱。</description>
+
+    <properties>
+        <!-- 根 POM 只负责本仓库 Reactor 聚合，不能成为外部消费者的发布父项。 -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
+    <modules>
+        <module>atlas-parent</module>
+        <module>atlas-bom</module>
+        <module>atlas-contract</module>
+
+        <module>domain-layer/atlas-domain-model</module>
+        <module>domain-layer/atlas-domain-testkit</module>
+
+        <module>application-layer/atlas-application-api</module>
+        <module>application-layer/atlas-application-core</module>
+
+        <module>infra-driven/atlas-analysis-spi</module>
+        <module>infra-driven/atlas-source-jvm</module>
+        <module>infra-driven/atlas-maven-source</module>
+        <module>infra-driven/atlas-spring-source</module>
+        <module>infra-driven/atlas-axon-source</module>
+        <module>infra-driven/atlas-axon-runtime</module>
+        <module>infra-driven/atlas-jpa-target-resolver</module>
+        <module>infra-driven/atlas-source-archive</module>
+        <module>infra-driven/atlas-file-store</module>
+        <module>infra-driven/atlas-content-store</module>
+
+        <module>infra-driving/atlas-annotations</module>
+        <module>infra-driving/atlas-annotation-processor</module>
+        <module>infra-driving/atlas-maven-plugin</module>
+        <module>infra-driving/atlas-cli</module>
+
+        <module>ui-layer/atlas-http-api</module>
+        <module>ui-layer/atlas-server-bootstrap</module>
+
+        <module>integration-test/fixture-projects/strict-explicit-java-sample</module>
+        <module>integration-test/atlas-architecture-conformance</module>
+        <module>integration-test/atlas-integration-tests</module>
+    </modules>
+</project>

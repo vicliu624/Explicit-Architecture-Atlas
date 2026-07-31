@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://explicit-architecture-atlas.dev/schema/atlas/0.1.0",
+  "title": "Explicit Architecture Atlas Snapshot",
+  "type": "object",
+  "required": ["schemaVersion", "snapshotId", "assets"],
+  "properties": {
+    "schemaVersion": { "const": "0.1.0" },
+    "snapshotId": { "type": "string", "minLength": 1 },
+    "assets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/asset" }
+    }
+  },
+  "$defs": {
+    "asset": {
+      "type": "object",
+      "required": ["id", "kind", "name", "evidence"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": {
+          "enum": [
+            "BUSINESS_CONCEPT",
+            "DOMAIN_CONSTRAINT",
+            "DOMAIN_EVENT",
+            "PROJECTION",
+            "PROCESS_MANAGER",
+            "ENDPOINT_OPERATION"
+          ]
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["source", "status", "locator"],
+      "properties": {
+        "source": { "enum": ["DECLARED", "DERIVED", "RUNTIME_OBSERVED", "PLANNED"] },
+        "status": { "enum": ["VERIFIED", "PARTIAL", "PENDING"] },
+        "locator": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

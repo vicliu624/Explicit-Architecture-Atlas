@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://explicit-architecture-atlas.dev/schema/runtime/0.1.0",
+  "title": "Explicit Architecture Atlas Runtime Observation",
+  "type": "object",
+  "required": ["assetId", "observedAt", "state"],
+  "properties": {
+    "assetId": { "type": "string", "minLength": 1 },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "state": { "enum": ["HEALTHY", "WAITING", "DELAYED", "RETRYING", "FAILED", "UNKNOWN"] },
+    "message": { "type": "string" },
+    "metrics": { "type": "object", "additionalProperties": { "type": "number" } }
+  }
+}

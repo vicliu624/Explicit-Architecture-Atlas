@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://explicit-architecture-atlas.dev/schema/content/0.1.0",
+  "title": "Explicit Architecture Atlas Business Content",
+  "type": "object",
+  "required": ["assetId", "businessName"],
+  "properties": {
+    "assetId": { "type": "string", "minLength": 1 },
+    "businessName": { "type": "string", "minLength": 1 },
+    "explanation": { "type": "string" },
+    "commonQuestions": { "type": "array", "items": { "type": "string" } },
+    "operationsGuide": { "type": "string" },
+    "owners": { "type": "array", "items": { "type": "string" } }
+  }
+}

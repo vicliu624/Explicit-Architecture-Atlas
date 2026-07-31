@@ -1,0 +1,13 @@
+# 复制到 workspace/local/ 后按部署环境填写；不要把真实内容回写到此模板。
+schemaVersion: "0.1.0"
+project:
+  id: "example-project"
+  displayName: "示例 Explicit Architecture 项目"
+sources:
+  projectRoot: "<absolute-path-to-project>"
+  sourceArchives: []
+content:
+  root: "<absolute-path-to-private-content-pack>"
+runtime:
+  enabled: false
+  # 运行态连接信息只应在 workspace/local/ 或密钥系统中配置。
