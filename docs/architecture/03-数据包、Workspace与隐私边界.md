@@ -18,7 +18,7 @@ flowchart LR
   Package --> Renderer["业务 / 运维 / 专家角色化渲染"]
 ```
 
-当前三条静态链路已经实现 Facts、Intent、空 Content Bundle 和无 Runtime Overlay 的 Package：Maven/JVM 提取项目结构、代码约束与调用边；Spring/Axon 提取 HTTP 端点、命令派发、命令处理、事件生产/消费、payload 与 Saga 生命周期；JPA/Spring Data 提取持久化实体、显式表/列映射、Repository 类型绑定和投影写入点。没有安装或尚未实现的适配器会在 `manifest.coverage` 中显式声明 `NOT_IMPLEMENTED` 或 `NOT_ENABLED`，绝不以“零结果”暗示系统中没有相应能力。
+当前三条静态链路已经实现 Facts、Intent 与 Content Bundle：Maven/JVM 提取项目结构、代码约束与调用边；Spring/Axon 提取 HTTP 端点、命令派发、命令处理、事件生产/消费、payload 与 Saga 生命周期；JPA/Spring Data 提取持久化实体、显式表/列映射、Repository 类型绑定和投影写入点。另有一条独立的 Runtime Overlay 链路：从私有、脱敏的 Axon 离线观测中产生投影与 Process Manager 的成功、失败、延迟、重试或未知状态。没有安装或尚未实现的适配器会在 `manifest.coverage` 中显式声明 `NOT_IMPLEMENTED` 或 `NOT_ENABLED`，绝不以“零结果”暗示系统中没有相应能力。
 
 ## Atlas Package 的固定边界
 
@@ -66,6 +66,7 @@ Package 的顶层固定为：
 | Spring 源码 | `@RequestMapping` 及其组合注解的 HTTP 方法/路由、明确 `CommandGateway`/`CommandBus` 的 `send`/`dispatch` | 不启动 Spring；动态路由、变量形式命令和无法确认接收器类型的派发不生成猜测边 |
 | Axon 源码 | `@CommandHandler`、`AggregateLifecycle.apply(new Event)`、`@EventHandler`、`@SagaEventHandler`、事件字段、Saga 开始/等待/结束/命令派发 | 静态事实不等于 Event Store 已持久化或 Saga 已在生产环境运行；动态事件类型不生成猜测边 |
 | JPA / Spring Data 源码 | `@Entity`、显式 `@Table` / `@Column`、Repository 泛型绑定，以及投影中可确认的 `save` / `persist` / `merge` 写入 | 不连接数据库；未显式声明 `@Table` / `@Column` 时只显示实体或属性，不按照命名策略猜测物理表/列 |
+| Axon Runtime Overlay | 私有离线观测中的处理器状态、采集时间、重试/延迟/错误分类，以及与静态 Projection / Process Manager 的确定性关联 | 不直接连接生产存储或保留 payload；未能唯一关联时只生成诊断，未采集到记录显示为 `UNKNOWN` 而非成功 |
 | Intent Manifest | 领域概念、约束、事件、投影、Process Manager、接口等显式语义 | 注解声明的是意图，不是生产运行证明 |
 | Source Archive Reader | 依据 Package 的 `project://` 证据，在私有 Workspace `sourceArchives` 中延迟定位 `src.jar` 的源码条目 | 归档路径与源码内容不写入 Package；仅专家模式在受控白名单内读取 |
 | 文件仓库 | Platform-safe JSON Package 原子写入与读回 | 文件名编码身份，Package 内保留原始 `packageId` |

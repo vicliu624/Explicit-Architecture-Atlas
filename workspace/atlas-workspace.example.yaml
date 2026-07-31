@@ -13,6 +13,7 @@ content:
   root: "<absolute-path-to-private-content-pack>"
 runtime:
   enabled: false
-  # 运行态连接信息只应在 workspace/local/ 或密钥系统中配置。
+  # 离线导出的脱敏 Axon 观测文件。真实文件只应放在 workspace/local/ 或安全导出目录。
+  observationFiles: []
 # 允许省略；没有 Profile 时 Atlas 只按内建/显式能力工作，不会猜测未实现的技术关系。
 # conventionProfileFile: "<absolute-path-to-convention-profile.json>"

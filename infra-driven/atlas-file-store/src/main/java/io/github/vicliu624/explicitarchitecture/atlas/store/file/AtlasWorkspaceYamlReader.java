@@ -41,7 +41,9 @@ public final class AtlasWorkspaceYamlReader {
                         pathList(configurationDirectory, sources.path("intentManifests"), normalizedFile, "intentManifests")),
                 optionalObject(root, "content").map(content -> new WorkspaceContent(
                         resolvePath(configurationDirectory, requiredText(content, "root", normalizedFile)))),
-                optionalObject(root, "runtime").map(runtime -> new WorkspaceRuntime(runtime.path("enabled").asBoolean(false))),
+                optionalObject(root, "runtime").map(runtime -> new WorkspaceRuntime(
+                        runtime.path("enabled").asBoolean(false),
+                        pathList(configurationDirectory, runtime.path("observationFiles"), normalizedFile, "runtime.observationFiles"))),
                 optionalText(root, "conventionProfileFile").map(value -> resolvePath(configurationDirectory, value)));
     }
 
@@ -93,6 +95,9 @@ public final class AtlasWorkspaceYamlReader {
     }
 
     private static List<Path> pathList(Path root, JsonNode node, Path file, String field) {
+        if (node.isMissingNode() || node.isNull()) {
+            return List.of();
+        }
         if (!node.isArray()) {
             throw new IllegalArgumentException("Workspace 字段 " + field + " 必须是数组: " + file);
         }

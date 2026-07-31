@@ -2,6 +2,9 @@ package io.github.vicliu624.explicitarchitecture.atlas.server;
 
 import io.github.vicliu624.explicitarchitecture.atlas.application.api.AtlasBuildUseCase;
 import io.github.vicliu624.explicitarchitecture.atlas.application.api.AtlasPackageQueryUseCase;
+import io.github.vicliu624.explicitarchitecture.atlas.application.api.AtlasRoleViewQueryUseCase;
+import io.github.vicliu624.explicitarchitecture.atlas.application.core.DefaultAtlasRoleViewQuery;
+import io.github.vicliu624.explicitarchitecture.atlas.http.AtlasHttpRouter;
 
 import java.util.Objects;
 
@@ -14,12 +17,31 @@ public final class AtlasServerComposition {
 
     private final AtlasBuildUseCase atlasBuildUseCase;
     private final AtlasPackageQueryUseCase atlasPackageQueryUseCase;
+    private final AtlasRoleViewQueryUseCase atlasRoleViewQueryUseCase;
+    private final AtlasHttpRouter atlasHttpRouter;
 
     public AtlasServerComposition(
             AtlasBuildUseCase atlasBuildUseCase,
             AtlasPackageQueryUseCase atlasPackageQueryUseCase) {
+        this(atlasBuildUseCase, atlasPackageQueryUseCase, new DefaultAtlasRoleViewQuery(atlasPackageQueryUseCase));
+    }
+
+    public AtlasServerComposition(
+            AtlasBuildUseCase atlasBuildUseCase,
+            AtlasPackageQueryUseCase atlasPackageQueryUseCase,
+            AtlasRoleViewQueryUseCase atlasRoleViewQueryUseCase) {
+        this(atlasBuildUseCase, atlasPackageQueryUseCase, atlasRoleViewQueryUseCase, new AtlasHttpRouter(atlasRoleViewQueryUseCase));
+    }
+
+    public AtlasServerComposition(
+            AtlasBuildUseCase atlasBuildUseCase,
+            AtlasPackageQueryUseCase atlasPackageQueryUseCase,
+            AtlasRoleViewQueryUseCase atlasRoleViewQueryUseCase,
+            AtlasHttpRouter atlasHttpRouter) {
         this.atlasBuildUseCase = Objects.requireNonNull(atlasBuildUseCase, "atlasBuildUseCase 不能为空");
         this.atlasPackageQueryUseCase = Objects.requireNonNull(atlasPackageQueryUseCase, "atlasPackageQueryUseCase 不能为空");
+        this.atlasRoleViewQueryUseCase = Objects.requireNonNull(atlasRoleViewQueryUseCase, "atlasRoleViewQueryUseCase 不能为空");
+        this.atlasHttpRouter = Objects.requireNonNull(atlasHttpRouter, "atlasHttpRouter 不能为空");
     }
 
     public AtlasBuildUseCase atlasBuildUseCase() {
@@ -28,5 +50,13 @@ public final class AtlasServerComposition {
 
     public AtlasPackageQueryUseCase atlasPackageQueryUseCase() {
         return atlasPackageQueryUseCase;
+    }
+
+    public AtlasRoleViewQueryUseCase atlasRoleViewQueryUseCase() {
+        return atlasRoleViewQueryUseCase;
+    }
+
+    public AtlasHttpRouter atlasHttpRouter() {
+        return atlasHttpRouter;
     }
 }

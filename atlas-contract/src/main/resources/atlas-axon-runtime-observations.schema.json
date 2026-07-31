@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vicliu624.github.io/explicit-architecture-atlas/schema/axon-runtime-observations-1.0.json",
+  "title": "Explicit Architecture Atlas Axon Runtime Observations 1.0",
+  "description": "A private, sanitized, offline export. It must be supplied from workspace/local and is not embedded as a source file in an Atlas Package.",
+  "type": "object",
+  "required": ["schemaVersion", "capturedAt", "observations"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "eventType", "handlerType", "observedAt", "status", "attributes"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "pattern": "^\\S+$" },
+          "eventType": { "type": "string", "minLength": 1, "pattern": "^\\S+$" },
+          "handlerType": { "type": "string", "minLength": 1, "pattern": "^\\S+$" },
+          "observedAt": { "type": "string", "format": "date-time" },
+          "status": { "enum": ["SUCCEEDED", "FAILED", "LAGGING", "RETRYING"] },
+          "attributes": { "type": "object" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
