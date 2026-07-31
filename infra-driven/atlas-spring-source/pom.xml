@@ -6,5 +6,6 @@
     <name>Explicit Architecture Atlas :: Spring Source Analyzer</name>
     <dependencies>
         <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-analysis-spi</artifactId><version>${project.version}</version></dependency>
+        <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-source-jvm</artifactId><version>${project.version}</version></dependency>
     </dependencies>
 </project>

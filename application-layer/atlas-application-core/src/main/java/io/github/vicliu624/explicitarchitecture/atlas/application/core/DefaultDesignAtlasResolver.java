@@ -67,6 +67,7 @@ public final class DefaultDesignAtlasResolver implements DesignAtlasResolver {
         ResolutionState state = new ResolutionState(facts);
         state.addSourceElements();
         state.addIntentAssets(intents.declarations());
+        state.addFrameworkSemantics();
         state.addDerivedValidationConstraints();
         state.addResolvedCalls();
         return new DesignAtlasResolution(
@@ -99,6 +100,342 @@ public final class DefaultDesignAtlasResolver implements DesignAtlasResolver {
                 if (kind != null) {
                     upsertCodeElement(fact.subject(), kind, fact.evidence(), fact.evidence().getFirst().locator());
                 }
+            }
+        }
+
+        /**
+         * 将 Spring/Axon 已证明的源码事实归一为最终 Atlas 节点与关系。
+         *
+         * <p>框架分析器只提供证据充分的原始事实；这里不根据包名或命名约定推断端点、事件或 Saga。
+         * 显式意图存在时它决定业务名称与用途，不存在时才生成带 {@code derived:} 身份的技术语义节点。</p>
+         */
+        private void addFrameworkSemantics() {
+            addHttpEndpoints();
+            addEventPayloadFields();
+            addEventPublications();
+            addEventConsumptions();
+            addCommandHandlers();
+            addCommandDispatches();
+            addProcessLifecycle();
+            addProcessDispatches();
+        }
+
+        private void addHttpEndpoints() {
+            for (SourceFact fact : facts.facts()) {
+                if (fact.kind() != FactKind.HTTP_ENDPOINT) {
+                    continue;
+                }
+                String handler = text(fact.attributes(), "handler").orElse(fact.subject());
+                AtlasId handlerId = ensureCodeElement(handler, CodeElementKind.METHOD, fact.evidence());
+                EndpointOperation endpoint = singleRepresenting(handlerId, EndpointOperation.class).orElse(null);
+                if (endpoint == null) {
+                    AtlasId endpointId = AtlasId.of("derived:endpoint:" + encode(fact.id().value()));
+                    endpoint = new EndpointOperation(new AssetMetadata(
+                            endpointId,
+                            endpointName(fact),
+                            fact.attributes(),
+                            fact.evidence()),
+                            "由 Spring MVC 映射注解识别的外部接口；尚未提供显式业务目的。");
+                    putNode(endpoint);
+                    addRelation(RelationKind.REPRESENTS, endpoint.id(), handlerId, fact.evidence(),
+                            "derived-endpoint-represents:" + endpoint.id() + ":" + handlerId);
+                } else {
+                    replaceEndpoint(endpoint, fact.attributes(), fact.evidence());
+                }
+            }
+        }
+
+        private void addEventPayloadFields() {
+            for (SourceFact fact : facts.facts()) {
+                if (fact.kind() != FactKind.EVENT_PAYLOAD_FIELD) {
+                    continue;
+                }
+                String eventType = text(fact.attributes(), "eventType").orElse(null);
+                String fieldName = text(fact.attributes(), "fieldName").orElse(null);
+                if (eventType == null || fieldName == null) {
+                    continue;
+                }
+                AtlasId eventCodeId = ensureCodeElement(eventType, CodeElementKind.TYPE, fact.evidence());
+                DomainEvent event = eventFor(eventType, eventCodeId, fact);
+                String fieldType = text(fact.attributes(), "fieldType").orElse("");
+                EventFieldRole role = eventFieldRole(text(fact.attributes(), "fieldRole").orElse("UNSPECIFIED"));
+                if (event.payload().stream().noneMatch(field -> field.name().equals(fieldName))) {
+                    List<EventField> payload = new ArrayList<>(event.payload());
+                    payload.add(new EventField(fieldName, role, fieldType.isBlank() ? "" : "Java 类型: " + fieldType));
+                    nodes.put(event.id(), new DomainEvent(
+                            metadataWith(event.metadata(), event.metadata().attributes(), fact.evidence()),
+                            event.businessFact(),
+                            payload));
+                } else {
+                    nodes.put(event.id(), new DomainEvent(
+                            metadataWith(event.metadata(), event.metadata().attributes(), fact.evidence()),
+                            event.businessFact(),
+                            event.payload()));
+                }
+            }
+        }
+
+        private void addEventPublications() {
+            for (SourceFact fact : facts.facts()) {
+                if (fact.kind() != FactKind.EVENT_PUBLICATION) {
+                    continue;
+                }
+                String producer = text(fact.attributes(), "producer").orElse(null);
+                String eventType = text(fact.attributes(), "eventType").orElse(null);
+                if (producer == null || eventType == null) {
+                    continue;
+                }
+                AtlasId producerCodeId = ensureCodeElement(producer, CodeElementKind.METHOD, fact.evidence());
+                AtlasId eventCodeId = ensureCodeElement(eventType, CodeElementKind.TYPE, fact.evidence());
+                DomainEvent event = eventFor(eventType, eventCodeId, fact);
+                AtlasId semanticProducer = semanticOwnerForMethod(producer, producerCodeId).orElse(producerCodeId);
+                addRelation(RelationKind.PRODUCES, semanticProducer, event.id(), fact.evidence(), fact.attributes(),
+                        "produces:" + semanticProducer + ":" + event.id() + ":" + fact.id());
+            }
+        }
+
+        private void addEventConsumptions() {
+            for (SourceFact fact : facts.facts()) {
+                if (fact.kind() != FactKind.EVENT_CONSUMPTION) {
+                    continue;
+                }
+                String eventType = text(fact.attributes(), "eventType").orElse(null);
+                String consumer = text(fact.attributes(), "consumer").orElse(null);
+                String consumerType = text(fact.attributes(), "consumerType").orElse(null);
+                String role = text(fact.attributes(), "consumerRole").orElse("EVENT_HANDLER");
+                if (eventType == null || consumer == null || consumerType == null) {
+                    continue;
+                }
+                AtlasId eventCodeId = ensureCodeElement(eventType, CodeElementKind.TYPE, fact.evidence());
+                DomainEvent event = eventFor(eventType, eventCodeId, fact);
+                AtlasId consumerCodeId = ensureCodeElement(consumer, CodeElementKind.METHOD, fact.evidence());
+                AtlasId consumerTypeCodeId = ensureCodeElement(consumerType, CodeElementKind.TYPE, fact.evidence());
+                AtlasId target = switch (role) {
+                    case "PROCESS_MANAGER" -> processManagerFor(consumerType, consumerTypeCodeId, fact).id();
+                    case "PROJECTION" -> projectionFor(consumerType, consumerTypeCodeId, fact).id();
+                    default -> semanticOwnerForMethod(consumer, consumerCodeId).orElse(consumerCodeId);
+                };
+                addRelation(RelationKind.CONSUMES, event.id(), target, fact.evidence(), fact.attributes(),
+                        "consumes:" + event.id() + ":" + target + ":" + fact.id());
+            }
+        }
+
+        private void addCommandHandlers() {
+            for (SourceFact fact : facts.facts()) {
+                if (fact.kind() != FactKind.COMMAND_HANDLER) {
+                    continue;
+                }
+                String handler = text(fact.attributes(), "handler").orElse(null);
+                String commandType = text(fact.attributes(), "commandType").orElse(null);
+                if (handler == null || commandType == null) {
+                    continue;
+                }
+                AtlasId handlerId = ensureCodeElement(handler, CodeElementKind.METHOD, fact.evidence());
+                AtlasId commandId = ensureCodeElement(commandType, CodeElementKind.TYPE, fact.evidence());
+                addRelation(RelationKind.HANDLES, handlerId, commandId, fact.evidence(), fact.attributes(),
+                        "handles:" + handlerId + ":" + commandId + ":" + fact.id());
+            }
+        }
+
+        private void addCommandDispatches() {
+            for (SourceFact fact : facts.facts()) {
+                if (fact.kind() != FactKind.COMMAND_DISPATCH) {
+                    continue;
+                }
+                String caller = text(fact.attributes(), "caller").orElse(null);
+                String commandType = text(fact.attributes(), "commandType").orElse(null);
+                if (caller == null || commandType == null) {
+                    continue;
+                }
+                AtlasId callerCodeId = ensureCodeElement(caller, CodeElementKind.METHOD, fact.evidence());
+                AtlasId commandId = ensureCodeElement(commandType, CodeElementKind.TYPE, fact.evidence());
+                AtlasId source = singleRepresenting(callerCodeId, EndpointOperation.class)
+                        .map(ArchitectureAsset::id)
+                        .orElseGet(() -> semanticOwnerForMethod(caller, callerCodeId).orElse(callerCodeId));
+                addRelation(RelationKind.DISPATCHES, source, commandId, fact.evidence(), fact.attributes(),
+                        "dispatches:" + source + ":" + commandId + ":" + fact.id());
+            }
+        }
+
+        private void addProcessLifecycle() {
+            for (SourceFact fact : facts.facts()) {
+                if (!List.of(FactKind.PROCESS_START, FactKind.PROCESS_WAIT, FactKind.PROCESS_COMPLETION).contains(fact.kind())) {
+                    continue;
+                }
+                String managerType = text(fact.attributes(), "processManager").orElse(null);
+                String eventType = text(fact.attributes(), "eventType").orElse(null);
+                if (managerType == null || eventType == null) {
+                    continue;
+                }
+                AtlasId managerCodeId = ensureCodeElement(managerType, CodeElementKind.TYPE, fact.evidence());
+                ProcessManager manager = processManagerFor(managerType, managerCodeId, fact);
+                AtlasId eventCodeId = ensureCodeElement(eventType, CodeElementKind.TYPE, fact.evidence());
+                DomainEvent event = eventFor(eventType, eventCodeId, fact);
+                RelationKind relationKind = switch (fact.kind()) {
+                    case PROCESS_START -> RelationKind.STARTS;
+                    case PROCESS_WAIT -> RelationKind.WAITS_FOR;
+                    case PROCESS_COMPLETION -> RelationKind.COMPLETES;
+                    default -> throw new IllegalStateException("不支持的流程事实: " + fact.kind());
+                };
+                if (relationKind == RelationKind.STARTS) {
+                    addRelation(relationKind, event.id(), manager.id(), fact.evidence(), fact.attributes(),
+                            "starts:" + event.id() + ":" + manager.id() + ":" + fact.id());
+                } else {
+                    addRelation(relationKind, manager.id(), event.id(), fact.evidence(), fact.attributes(),
+                            relationKind.name().toLowerCase() + ":" + manager.id() + ":" + event.id() + ":" + fact.id());
+                }
+            }
+        }
+
+        private void addProcessDispatches() {
+            for (SourceFact fact : facts.facts()) {
+                if (fact.kind() != FactKind.PROCESS_DISPATCH) {
+                    continue;
+                }
+                String managerType = text(fact.attributes(), "processManager").orElse(null);
+                String commandType = text(fact.attributes(), "commandType").orElse(null);
+                if (managerType == null || commandType == null) {
+                    continue;
+                }
+                AtlasId managerCodeId = ensureCodeElement(managerType, CodeElementKind.TYPE, fact.evidence());
+                ProcessManager manager = processManagerFor(managerType, managerCodeId, fact);
+                AtlasId commandId = ensureCodeElement(commandType, CodeElementKind.TYPE, fact.evidence());
+                addRelation(RelationKind.DISPATCHES, manager.id(), commandId, fact.evidence(), fact.attributes(),
+                        "process-dispatches:" + manager.id() + ":" + commandId + ":" + fact.id());
+            }
+        }
+
+        private AtlasId ensureCodeElement(String sourceKey, CodeElementKind kind, List<Evidence> evidence) {
+            AtlasId id = codeId(sourceKey);
+            if (!nodes.containsKey(id)) {
+                upsertCodeElement(sourceKey, kind, evidence, evidence.getFirst().locator());
+            }
+            return id;
+        }
+
+        private DomainEvent eventFor(String eventType, AtlasId eventCodeId, SourceFact fact) {
+            Optional<DomainEvent> explicit = singleRepresenting(eventCodeId, DomainEvent.class);
+            if (explicit.isPresent()) {
+                return explicit.get();
+            }
+            AtlasId id = AtlasId.of("derived:event:" + encode(eventType));
+            ArchitectureAsset existing = nodes.get(id);
+            if (existing instanceof DomainEvent event) {
+                return event;
+            }
+            DomainEvent event = new DomainEvent(
+                    new AssetMetadata(id, simpleName(eventType), Map.of(
+                            "derivedFromFact", AtlasValue.text(fact.id().value()),
+                            "eventType", AtlasValue.text(eventType)), fact.evidence()),
+                    "由 Axon 源码识别的领域事件；尚未提供显式业务事实说明。",
+                    List.of());
+            putNode(event);
+            addRelation(RelationKind.REPRESENTS, event.id(), eventCodeId, fact.evidence(),
+                    "derived-event-represents:" + event.id() + ":" + eventCodeId);
+            return event;
+        }
+
+        private ProcessManager processManagerFor(String typeName, AtlasId typeCodeId, SourceFact fact) {
+            Optional<ProcessManager> explicit = singleRepresenting(typeCodeId, ProcessManager.class);
+            if (explicit.isPresent()) {
+                return explicit.get();
+            }
+            AtlasId id = AtlasId.of("derived:process-manager:" + encode(typeName));
+            ArchitectureAsset existing = nodes.get(id);
+            if (existing instanceof ProcessManager processManager) {
+                return processManager;
+            }
+            ProcessManager processManager = new ProcessManager(
+                    new AssetMetadata(id, simpleName(typeName), Map.of(
+                            "derivedFromFact", AtlasValue.text(fact.id().value()),
+                            "implementationType", AtlasValue.text(typeName)), fact.evidence()),
+                    "由 Axon Saga 源码识别的跨聚合流程；尚未提供显式业务职责说明。",
+                    "");
+            putNode(processManager);
+            addRelation(RelationKind.REPRESENTS, processManager.id(), typeCodeId, fact.evidence(),
+                    "derived-process-represents:" + processManager.id() + ":" + typeCodeId);
+            return processManager;
+        }
+
+        private Projection projectionFor(String typeName, AtlasId typeCodeId, SourceFact fact) {
+            Optional<Projection> explicit = singleRepresenting(typeCodeId, Projection.class);
+            if (explicit.isPresent()) {
+                return explicit.get();
+            }
+            AtlasId id = AtlasId.of("derived:projection:" + encode(typeName));
+            ArchitectureAsset existing = nodes.get(id);
+            if (existing instanceof Projection projection) {
+                return projection;
+            }
+            Projection projection = new Projection(
+                    new AssetMetadata(id, simpleName(typeName), Map.of(
+                            "derivedFromFact", AtlasValue.text(fact.id().value()),
+                            "implementationType", AtlasValue.text(typeName)), fact.evidence()),
+                    "由 Axon 事件处理器识别的读模型投影；尚未提供显式业务用途说明。");
+            putNode(projection);
+            addRelation(RelationKind.REPRESENTS, projection.id(), typeCodeId, fact.evidence(),
+                    "derived-projection-represents:" + projection.id() + ":" + typeCodeId);
+            return projection;
+        }
+
+        private Optional<AtlasId> semanticOwnerForMethod(String method, AtlasId methodCodeId) {
+            String owner = method.contains("#") ? method.substring(0, method.indexOf('#')) : "";
+            if (owner.isBlank()) {
+                return Optional.empty();
+            }
+            AtlasId ownerCodeId = codeId(owner);
+            List<ArchitectureAsset> owners = semanticRepresentations(ownerCodeId).stream()
+                    .filter(asset -> asset instanceof BusinessConcept || asset instanceof ApplicationUseCase)
+                    .toList();
+            return owners.size() == 1 ? Optional.of(owners.getFirst().id()) : Optional.empty();
+        }
+
+        private <T extends ArchitectureAsset> Optional<T> singleRepresenting(AtlasId codeId, Class<T> assetType) {
+            List<T> candidates = semanticRepresentations(codeId).stream()
+                    .filter(assetType::isInstance)
+                    .map(assetType::cast)
+                    .toList();
+            return candidates.size() == 1 ? Optional.of(candidates.getFirst()) : Optional.empty();
+        }
+
+        private List<ArchitectureAsset> semanticRepresentations(AtlasId codeId) {
+            return relations.values().stream()
+                    .filter(relation -> relation.kind() == RelationKind.REPRESENTS && relation.targetId().equals(codeId))
+                    .map(AtlasRelation::sourceId)
+                    .map(nodes::get)
+                    .filter(Objects::nonNull)
+                    .filter(asset -> !(asset instanceof CodeElement))
+                    .toList();
+        }
+
+        private void replaceEndpoint(EndpointOperation endpoint, Map<String, AtlasValue> discoveredAttributes, List<Evidence> evidence) {
+            Map<String, AtlasValue> attributes = new LinkedHashMap<>(endpoint.attributes());
+            discoveredAttributes.forEach(attributes::putIfAbsent);
+            nodes.put(endpoint.id(), new EndpointOperation(
+                    metadataWith(endpoint.metadata(), attributes, evidence),
+                    endpoint.purpose()));
+        }
+
+        private AssetMetadata metadataWith(AssetMetadata original, Map<String, AtlasValue> attributes, List<Evidence> evidence) {
+            return new AssetMetadata(original.id(), original.name(), attributes, mergeEvidence(original.evidence(), evidence));
+        }
+
+        private static String endpointName(SourceFact fact) {
+            String paths = values(fact.attributes(), "paths").stream().findFirst().orElse("/");
+            String methods = values(fact.attributes(), "httpMethods").stream().findFirst().orElse("HTTP");
+            return methods + " " + paths;
+        }
+
+        private static String simpleName(String qualifiedName) {
+            int separator = Math.max(qualifiedName.lastIndexOf('.'), qualifiedName.lastIndexOf('$'));
+            return separator < 0 ? qualifiedName : qualifiedName.substring(separator + 1);
+        }
+
+        private static EventFieldRole eventFieldRole(String value) {
+            try {
+                return EventFieldRole.valueOf(value);
+            } catch (IllegalArgumentException ignored) {
+                return EventFieldRole.UNSPECIFIED;
             }
         }
 
@@ -301,8 +638,18 @@ public final class DefaultDesignAtlasResolver implements DesignAtlasResolver {
         }
 
         private void addRelation(RelationKind kind, AtlasId source, AtlasId target, List<Evidence> evidence, String identity) {
+            addRelation(kind, source, target, evidence, Map.of(), identity);
+        }
+
+        private void addRelation(
+                RelationKind kind,
+                AtlasId source,
+                AtlasId target,
+                List<Evidence> evidence,
+                Map<String, AtlasValue> attributes,
+                String identity) {
             AtlasId id = AtlasId.of("relation:" + encode(identity));
-            relations.putIfAbsent(id, new AtlasRelation(id, kind, source, target, Map.of(), evidence));
+            relations.putIfAbsent(id, new AtlasRelation(id, kind, source, target, attributes, evidence));
         }
 
         private static AtlasId assetIdOf(IntentDeclaration declaration) {

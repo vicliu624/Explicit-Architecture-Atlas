@@ -4,11 +4,21 @@
     <parent><groupId>io.github.vicliu624.explicitarchitecture</groupId><artifactId>explicit-architecture-atlas-parent</artifactId><version>0.1.0-SNAPSHOT</version><relativePath>../../../atlas-parent/pom.xml</relativePath></parent>
     <artifactId>explicit-architecture-atlas-fixture-strict-explicit-java</artifactId>
     <name>Explicit Architecture Atlas :: Fixture :: Strict Explicit Java</name>
-    <properties><maven.deploy.skip>true</maven.deploy.skip></properties>
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <spring.framework.version>6.2.3</spring.framework.version>
+        <axon.framework.version>4.10.3</axon.framework.version>
+    </properties>
     <dependencies>
         <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-annotations</artifactId><version>${project.version}</version></dependency>
         <!-- 使 Reactor 明确建立处理器编译顺序；provided 保证 fixture 运行时不携带处理器。 -->
         <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-annotation-processor</artifactId><version>${project.version}</version><scope>provided</scope></dependency>
+        <!-- 夹具使用真实 Spring / Axon 源码语法，均只在编译期提供。 -->
+        <dependency><groupId>org.springframework</groupId><artifactId>spring-web</artifactId><version>${spring.framework.version}</version><scope>provided</scope></dependency>
+        <dependency><groupId>org.axonframework</groupId><artifactId>axon-messaging</artifactId><version>${axon.framework.version}</version><scope>provided</scope></dependency>
+        <dependency><groupId>org.axonframework</groupId><artifactId>axon-modelling</artifactId><version>${axon.framework.version}</version><scope>provided</scope></dependency>
+        <dependency><groupId>org.axonframework</groupId><artifactId>axon-eventsourcing</artifactId><version>${axon.framework.version}</version><scope>provided</scope></dependency>
+        <dependency><groupId>org.axonframework</groupId><artifactId>axon-spring</artifactId><version>${axon.framework.version}</version><scope>provided</scope></dependency>
     </dependencies>
     <build>
         <plugins>

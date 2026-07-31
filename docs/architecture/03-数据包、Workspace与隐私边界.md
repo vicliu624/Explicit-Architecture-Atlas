@@ -18,7 +18,7 @@ flowchart LR
   Package --> Renderer["业务 / 运维 / 专家角色化渲染"]
 ```
 
-当前第一条链路已经实现 Facts、Intent、空 Content Bundle 和无 Runtime Overlay 的 Package。没有安装的适配器会在 `manifest.coverage` 中显式声明 `NOT_IMPLEMENTED` 或 `NOT_ENABLED`，绝不以“零结果”暗示系统中没有相应能力。
+当前两条链路已经实现 Facts、Intent、空 Content Bundle 和无 Runtime Overlay 的 Package：Maven/JVM 提取项目结构、代码约束与调用边；Spring/Axon 提取 HTTP 端点、命令派发、命令处理、事件生产/消费、payload 与 Saga 生命周期。没有安装或尚未实现的适配器会在 `manifest.coverage` 中显式声明 `NOT_IMPLEMENTED` 或 `NOT_ENABLED`，绝不以“零结果”暗示系统中没有相应能力。
 
 ## Atlas Package 的固定边界
 
@@ -63,7 +63,10 @@ Package 的顶层固定为：
 | --- | --- | --- |
 | JDK Java 语法树 | 类型、字段、方法、注解、`Pattern.compile`、常见 guard、可唯一解析的方法调用 | 不反射加载业务工程；无法唯一解析的调用不生成猜测边 |
 | Maven POM | Reactor 模块、子模块关系、直接依赖 | 读取声明模型，不执行 Maven，不声称取得 effective POM |
+| Spring 源码 | `@RequestMapping` 及其组合注解的 HTTP 方法/路由、明确 `CommandGateway`/`CommandBus` 的 `send`/`dispatch` | 不启动 Spring；动态路由、变量形式命令和无法确认接收器类型的派发不生成猜测边 |
+| Axon 源码 | `@CommandHandler`、`AggregateLifecycle.apply(new Event)`、`@EventHandler`、`@SagaEventHandler`、事件字段、Saga 开始/等待/结束/命令派发 | 静态事实不等于 Event Store 已持久化或 Saga 已在生产环境运行；动态事件类型不生成猜测边 |
 | Intent Manifest | 领域概念、约束、事件、投影、Process Manager、接口等显式语义 | 注解声明的是意图，不是生产运行证明 |
+| Source Archive Reader | 依据 Package 的 `project://` 证据，在私有 Workspace `sourceArchives` 中延迟定位 `src.jar` 的源码条目 | 归档路径与源码内容不写入 Package；仅专家模式在受控白名单内读取 |
 | 文件仓库 | Platform-safe JSON Package 原子写入与读回 | 文件名编码身份，Package 内保留原始 `packageId` |
 
 例如 `@AtlasConstraint` 的 `businessMeaning` 成为业务视图中的规则说明，`expression`、对应 `Pattern`/guard 和源码位置仍作为专家证据保留。这样既能回答“为什么订单编号不能录入”，又能让开发者展开真实正则和执行点。
@@ -119,3 +122,5 @@ Profile 是可版本化、可复用的“技术约定 → FactKind”映射。�
 - 真实业务文档、SLA、合作方信息和内部责任分配。
 
 专家模式需要源码时，服务端应按 Package Evidence 的受控 URI 和 Workspace 白名单提供内容；Web 绝不能接收任意服务器路径后直接读取文件系统。
+
+`SourceArchiveReader` 已提供受控的 `project://` → `src.jar` 查找：它仅接受 Workspace 明确给出的归档，拒绝 ZIP 条目路径穿越，并兼容 `src/main/java/...` 与普通 source JAR 的 `...` 两种布局。它返回的源码内容只留在本次专家模式读取中，不会回写到 Atlas Package。

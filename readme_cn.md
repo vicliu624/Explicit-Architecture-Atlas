@@ -351,8 +351,8 @@ Atlas 在第一阶段不承担以下职责：
 
 ## 项目状态
 
-当前项目已完成第一条可执行的最终形态链路，而不是一次性原型：可发布 Maven 工件的边界、独立 Web 边界、私有 Workspace 边界、版本化 Schema、类型化 Atlas Package、事实/意图/内容/运行态的独立模型、能力覆盖与诊断、编译期意图索引、Maven/JVM 事实提取、文件型 Package 仓库、可执行 CLI 和端到端 fixture 测试均已建立。
+当前项目已完成两条可执行的最终形态链路，而不是一次性原型：可发布 Maven 工件的边界、独立 Web 边界、私有 Workspace 边界、版本化 Schema、类型化 Atlas Package、事实/意图/内容/运行态的独立模型、能力覆盖与诊断、编译期意图索引、Maven/JVM/Spring/Axon 事实提取、文件型 Package 仓库、可执行 CLI 和端到端 fixture 测试均已建立。
 
-当前 `atlas extract` 已经能够从严格显式架构样例中生成领域约束的业务说明、正则和源码证据，并恢复入口到领域方法的可确认调用边。没有实现的 Spring、Axon、JPA、运行态能力不会被渲染成“没有事件、Saga 或投影”，而会由 Package 的 `coverage` 明确表达为未启用或未实现。
+当前 `atlas extract` 已经能够从严格显式架构样例中生成领域约束的业务说明、正则和源码证据，并恢复入口到领域方法的可确认调用边；还会提取 Spring MVC 的 HTTP 方法与路由、Command Gateway/Bus 派发、Axon 命令处理、`AggregateLifecycle.apply` 事件生产、事件消费者、事件 payload 字段，以及 Saga 的开始、等待、结束和后续命令。每条关系均保留源码证据。尚未实现的 JPA 投影目的地与运行态能力不会被渲染成“不存在”，而会由 Package 的 `coverage` 明确表达为未启用或未实现。
 
-后续会以同一个 Package、同一个 Fact → Intent → Design Atlas 流水线继续接入 Spring 接口、Axon 事件/Saga、JPA 投影目的地、运行态 Overlay 和业务/运维/专家角色化 Explorer；不会推倒已存在的数据包、Workspace 或 CLI 边界。具体工作继续遵守 [工程结构与 Maven 发布](docs/architecture/01-工程结构与Maven发布.md) 和 [依赖规则与装配](docs/architecture/02-依赖规则与装配.md) 的边界。
+后续会以同一个 Package、同一个 Fact → Intent → Design Atlas 流水线继续接入 JPA 投影目的地、运行态 Overlay 和业务/运维/专家角色化 Explorer；源码专家模式可通过 Workspace 私有 `sourceArchives` 将 Package 的 `project://` 证据定位回 `src.jar` 条目。不会推倒已存在的数据包、Workspace 或 CLI 边界。具体工作继续遵守 [工程结构与 Maven 发布](docs/architecture/01-工程结构与Maven发布.md) 和 [依赖规则与装配](docs/architecture/02-依赖规则与装配.md) 的边界。

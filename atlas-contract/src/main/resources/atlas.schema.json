@@ -213,7 +213,7 @@
     "fact": {
       "type": "object",
       "required": ["id", "analyzerId", "kind", "subject", "attributes", "evidence"],
-      "properties": { "id": { "$ref": "#/$defs/id" }, "analyzerId": { "type": "string", "minLength": 1 }, "kind": { "enum": ["PROJECT", "MAVEN_MODULE", "MAVEN_DEPENDENCY", "SOURCE_TYPE", "SOURCE_FIELD", "SOURCE_METHOD", "ANNOTATION", "VALIDATION_RULE", "METHOD_CALL", "EVENT_PUBLICATION", "EVENT_CONSUMPTION", "PROJECTION_WRITE", "PROCESS_START", "PROCESS_WAIT", "PROCESS_DISPATCH", "PROCESS_COMPLETION", "RUNTIME_MEASUREMENT"] }, "subject": { "type": "string", "minLength": 1 }, "attributes": { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }, "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } } },
+      "properties": { "id": { "$ref": "#/$defs/id" }, "analyzerId": { "type": "string", "minLength": 1 }, "kind": { "enum": ["PROJECT", "MAVEN_MODULE", "MAVEN_DEPENDENCY", "SOURCE_TYPE", "SOURCE_FIELD", "SOURCE_METHOD", "ANNOTATION", "VALIDATION_RULE", "METHOD_CALL", "HTTP_ENDPOINT", "COMMAND_DISPATCH", "COMMAND_HANDLER", "EVENT_PUBLICATION", "EVENT_CONSUMPTION", "EVENT_PAYLOAD_FIELD", "PROJECTION_WRITE", "PROCESS_START", "PROCESS_WAIT", "PROCESS_DISPATCH", "PROCESS_COMPLETION", "RUNTIME_MEASUREMENT"] }, "subject": { "type": "string", "minLength": 1 }, "attributes": { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }, "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } } },
       "additionalProperties": false
     },
     "factRelation": {
