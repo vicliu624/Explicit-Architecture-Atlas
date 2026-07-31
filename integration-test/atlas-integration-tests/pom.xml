@@ -8,5 +8,9 @@
     <dependencies>
         <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.11.4</version><scope>test</scope></dependency>
         <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-application-core</artifactId><version>${project.version}</version><scope>test</scope></dependency>
+        <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-source-jvm</artifactId><version>${project.version}</version><scope>test</scope></dependency>
+        <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-maven-source</artifactId><version>${project.version}</version><scope>test</scope></dependency>
+        <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-file-store</artifactId><version>${project.version}</version><scope>test</scope></dependency>
+        <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-fixture-strict-explicit-java</artifactId><version>${project.version}</version><scope>test</scope></dependency>
     </dependencies>
 </project>

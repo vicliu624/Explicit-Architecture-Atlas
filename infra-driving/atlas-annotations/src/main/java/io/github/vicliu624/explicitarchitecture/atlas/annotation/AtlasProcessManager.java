@@ -8,6 +8,7 @@ import java.lang.annotation.Target;
 
 /** 标注 Process Manager / Saga 的跨聚合业务职责。 */
 @Documented
+@AtlasIntent(assetKind = AtlasIntentKind.PROCESS_MANAGER)
 @Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.TYPE)
 public @interface AtlasProcessManager {

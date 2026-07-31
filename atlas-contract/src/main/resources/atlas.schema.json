@@ -1,50 +1,243 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://explicit-architecture-atlas.dev/schema/atlas/0.1.0",
-  "title": "Explicit Architecture Atlas Snapshot",
+  "$id": "https://explicit-architecture-atlas.dev/schema/atlas-package/1.0",
+  "title": "Explicit Architecture Atlas Package",
   "type": "object",
-  "required": ["schemaVersion", "snapshotId", "assets"],
+  "required": ["manifest", "designAtlas", "facts", "intents", "content", "diagnostics"],
   "properties": {
-    "schemaVersion": { "const": "0.1.0" },
-    "snapshotId": { "type": "string", "minLength": 1 },
-    "assets": {
+    "manifest": { "$ref": "#/$defs/manifest" },
+    "designAtlas": { "$ref": "#/$defs/designAtlas" },
+    "facts": { "$ref": "#/$defs/factBundle" },
+    "intents": { "$ref": "#/$defs/intentBundle" },
+    "content": { "$ref": "#/$defs/contentBundle" },
+    "runtimeOverlay": { "$ref": "#/$defs/runtimeOverlay" },
+    "diagnostics": {
       "type": "array",
-      "items": { "$ref": "#/$defs/asset" }
+      "items": { "$ref": "#/$defs/diagnostic" }
     }
   },
+  "additionalProperties": false,
   "$defs": {
-    "asset": {
+    "id": { "type": "string", "minLength": 1, "pattern": "^\\S+$" },
+    "manifest": {
       "type": "object",
-      "required": ["id", "kind", "name", "evidence"],
+      "required": ["schemaVersion", "packageId", "projectId", "sourceRevision", "generatedAt", "coverage"],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "kind": {
-          "enum": [
-            "BUSINESS_CONCEPT",
-            "DOMAIN_CONSTRAINT",
-            "DOMAIN_EVENT",
-            "PROJECTION",
-            "PROCESS_MANAGER",
-            "ENDPOINT_OPERATION"
-          ]
-        },
-        "name": { "type": "string", "minLength": 1 },
-        "evidence": {
-          "type": "array",
-          "minItems": 1,
-          "items": { "$ref": "#/$defs/evidence" }
-        }
+        "schemaVersion": { "const": "1.0" },
+        "packageId": { "$ref": "#/$defs/id" },
+        "projectId": { "$ref": "#/$defs/id" },
+        "sourceRevision": { "type": "string", "minLength": 1 },
+        "generatedAt": { "type": "string", "format": "date-time" },
+        "coverage": { "type": "array", "items": { "$ref": "#/$defs/coverage" } }
       },
-      "additionalProperties": true
+      "additionalProperties": false
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["analyzerId", "status", "scopeUri"],
+      "properties": {
+        "analyzerId": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["COMPLETE", "PARTIAL", "NOT_ENABLED", "NOT_IMPLEMENTED", "NOT_APPLICABLE", "FAILED"] },
+        "scopeUri": { "type": "string", "pattern": "^project://" },
+        "summary": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "designAtlas": {
+      "type": "object",
+      "required": ["nodes", "relations"],
+      "properties": {
+        "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" } },
+        "relations": { "type": "array", "items": { "$ref": "#/$defs/relation" } }
+      },
+      "additionalProperties": false
+    },
+    "nodeBase": {
+      "type": "object",
+      "required": ["id", "kind", "name", "attributes", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "type": "string" },
+        "name": { "type": "string", "minLength": 1 },
+        "attributes": { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } },
+        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } }
+      }
+    },
+    "node": {
+      "oneOf": [
+        { "$ref": "#/$defs/businessConcept" },
+        { "$ref": "#/$defs/domainConstraint" },
+        { "$ref": "#/$defs/domainEvent" },
+        { "$ref": "#/$defs/applicationUseCase" },
+        { "$ref": "#/$defs/projection" },
+        { "$ref": "#/$defs/processManager" },
+        { "$ref": "#/$defs/endpointOperation" },
+        { "$ref": "#/$defs/codeElement" },
+        { "$ref": "#/$defs/dataTarget" },
+        { "$ref": "#/$defs/externalBoundary" }
+      ]
+    },
+    "businessConcept": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "BUSINESS_CONCEPT" }, "responsibility": { "type": "string", "minLength": 1 } }, "required": ["responsibility"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "domainConstraint": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "DOMAIN_CONSTRAINT" }, "subjectId": { "$ref": "#/$defs/id" }, "constraintKind": { "enum": ["REQUIRED", "IDENTITY_FORMAT", "VALUE_RANGE", "CROSS_CONCEPT_CONSISTENCY", "UNIQUENESS", "STATE_TRANSITION", "EVENT_PRECONDITION", "TEMPORAL", "OWNERSHIP", "COMPENSATION", "CUSTOM"] }, "enforcementLevel": { "enum": ["HARD", "CONDITIONAL", "ADVISORY"] }, "statement": { "type": "string", "minLength": 1 } }, "required": ["subjectId", "constraintKind", "enforcementLevel", "statement"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "domainEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "DOMAIN_EVENT" }, "businessFact": { "type": "string", "minLength": 1 }, "payload": { "type": "array", "items": { "$ref": "#/$defs/eventField" } } }, "required": ["businessFact", "payload"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "applicationUseCase": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "APPLICATION_USE_CASE" }, "purpose": { "type": "string", "minLength": 1 } }, "required": ["purpose"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "projection": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "PROJECTION" }, "purpose": { "type": "string", "minLength": 1 } }, "required": ["purpose"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "processManager": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "PROCESS_MANAGER" }, "responsibility": { "type": "string", "minLength": 1 }, "completionCondition": { "type": "string" } }, "required": ["responsibility"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "endpointOperation": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "ENDPOINT_OPERATION" }, "purpose": { "type": "string", "minLength": 1 } }, "required": ["purpose"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "codeElement": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "CODE_ELEMENT" }, "elementKind": { "enum": ["PACKAGE", "TYPE", "RECORD_COMPONENT", "FIELD", "CONSTRUCTOR", "METHOD", "PARAMETER", "ANNOTATION", "CONFIGURATION"] }, "qualifiedName": { "type": "string", "minLength": 1 }, "locator": { "$ref": "#/$defs/locator" } }, "required": ["elementKind", "qualifiedName", "locator"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "dataTarget": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "DATA_TARGET" }, "targetKind": { "enum": ["DATABASE_TABLE", "DATABASE_VIEW", "CACHE", "SEARCH_INDEX", "MESSAGE_TOPIC", "EXTERNAL_SYSTEM", "FILE", "UNSPECIFIED"] } }, "required": ["targetKind"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "externalBoundary": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "EXTERNAL_BOUNDARY" }, "boundaryKind": { "enum": ["REST_API", "MESSAGE_BROKER", "REMOTE_SERVICE", "IDENTITY_PROVIDER", "FILE_EXCHANGE", "HUMAN_OPERATOR", "UNSPECIFIED"] }, "responsibility": { "type": "string", "minLength": 1 } }, "required": ["boundaryKind", "responsibility"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "eventField": {
+      "type": "object",
+      "required": ["name", "role"],
+      "properties": { "name": { "type": "string", "minLength": 1 }, "role": { "enum": ["BUSINESS_IDENTITY", "BUSINESS_FACT", "CORRELATION", "TRACE", "SENSITIVE", "TECHNICAL", "UNSPECIFIED"] }, "businessMeaning": { "type": "string" } },
+      "additionalProperties": false
+    },
+    "relation": {
+      "type": "object",
+      "required": ["id", "kind", "sourceId", "targetId", "attributes", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["REPRESENTS", "CONTAINS", "DEPENDS_ON", "EXPOSES_TO", "CONSTRAINS", "CALLS", "HANDLES", "PRODUCES", "CONSUMES", "PUBLISHES", "PROJECTS_TO", "WRITES_TO", "STARTS", "WAITS_FOR", "DISPATCHES", "COMPLETES", "COMPENSATES", "EVIDENCED_BY"] },
+        "sourceId": { "$ref": "#/$defs/id" },
+        "targetId": { "$ref": "#/$defs/id" },
+        "attributes": { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } },
+        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } }
+      },
+      "additionalProperties": false
+    },
+    "value": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "array", "items": { "$ref": "#/$defs/value" } },
+        { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }
+      ]
+    },
+    "locator": {
+      "type": "object",
+      "required": ["uri", "symbol", "range"],
+      "properties": {
+        "uri": { "type": "string", "pattern": "^(project|archive|maven|runtime|document|generated)://" },
+        "symbol": { "type": "string" },
+        "range": { "type": "object", "required": ["startLine", "startColumn", "endLine", "endColumn"], "properties": { "startLine": { "type": "integer", "minimum": 0 }, "startColumn": { "type": "integer", "minimum": 0 }, "endLine": { "type": "integer", "minimum": 0 }, "endColumn": { "type": "integer", "minimum": 0 } }, "additionalProperties": false }
+      },
+      "additionalProperties": false
     },
     "evidence": {
       "type": "object",
-      "required": ["source", "status", "locator"],
+      "required": ["id", "origin", "claim", "status", "locator", "sourceRevision", "visibility", "analyzerId"],
       "properties": {
-        "source": { "enum": ["DECLARED", "DERIVED", "RUNTIME_OBSERVED", "PLANNED"] },
-        "status": { "enum": ["VERIFIED", "PARTIAL", "PENDING"] },
-        "locator": { "type": "string", "minLength": 1 }
-      }
-    }
+        "id": { "$ref": "#/$defs/id" },
+        "origin": { "enum": ["SOURCE_CODE", "MAVEN_MODEL", "ANNOTATION_MANIFEST", "CONTENT_BUNDLE", "RUNTIME_SYSTEM", "SOURCE_ARCHIVE", "PLANNED_DOCUMENT"] },
+        "claim": { "enum": ["DECLARED", "DERIVED", "OBSERVED", "PLANNED"] },
+        "status": { "enum": ["VERIFIED", "PARTIAL", "PENDING", "CONFLICTED"] },
+        "locator": { "$ref": "#/$defs/locator" },
+        "sourceRevision": { "type": "string", "minLength": 1 },
+        "visibility": { "enum": ["BUSINESS_SAFE", "OPS_SAFE", "EXPERT_ONLY", "RESTRICTED"] },
+        "analyzerId": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "factBundle": {
+      "type": "object",
+      "required": ["facts", "relations"],
+      "properties": {
+        "facts": { "type": "array", "items": { "$ref": "#/$defs/fact" } },
+        "relations": { "type": "array", "items": { "$ref": "#/$defs/factRelation" } }
+      },
+      "additionalProperties": false
+    },
+    "fact": {
+      "type": "object",
+      "required": ["id", "analyzerId", "kind", "subject", "attributes", "evidence"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "analyzerId": { "type": "string", "minLength": 1 }, "kind": { "enum": ["PROJECT", "MAVEN_MODULE", "MAVEN_DEPENDENCY", "SOURCE_TYPE", "SOURCE_FIELD", "SOURCE_METHOD", "ANNOTATION", "VALIDATION_RULE", "METHOD_CALL", "EVENT_PUBLICATION", "EVENT_CONSUMPTION", "PROJECTION_WRITE", "PROCESS_START", "PROCESS_WAIT", "PROCESS_DISPATCH", "PROCESS_COMPLETION", "RUNTIME_MEASUREMENT"] }, "subject": { "type": "string", "minLength": 1 }, "attributes": { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }, "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } } },
+      "additionalProperties": false
+    },
+    "factRelation": {
+      "type": "object",
+      "required": ["id", "kind", "sourceFactId", "targetFactId", "attributes", "evidence"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "$ref": "#/$defs/relation/properties/kind" }, "sourceFactId": { "$ref": "#/$defs/id" }, "targetFactId": { "$ref": "#/$defs/id" }, "attributes": { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }, "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } } },
+      "additionalProperties": false
+    },
+    "intentBundle": { "type": "object", "required": ["declarations"], "properties": { "declarations": { "type": "array", "items": { "$ref": "#/$defs/intent" } } }, "additionalProperties": false },
+    "intent": {
+      "type": "object",
+      "required": ["id", "annotationType", "assetKind", "target", "attributes", "evidence"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "annotationType": { "type": "string", "minLength": 1 }, "assetKind": { "type": "string" }, "target": { "type": "object", "required": ["kind", "binaryName", "memberDescriptor"], "properties": { "kind": { "type": "string" }, "binaryName": { "type": "string", "minLength": 1 }, "memberDescriptor": { "type": "string" } }, "additionalProperties": false }, "attributes": { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }, "evidence": { "$ref": "#/$defs/evidence" } },
+      "additionalProperties": false
+    },
+    "contentBundle": { "type": "object", "required": ["entries"], "properties": { "entries": { "type": "array", "items": { "$ref": "#/$defs/contentEntry" } } }, "additionalProperties": false },
+    "contentEntry": {
+      "type": "object",
+      "required": ["id", "assetId", "audience", "title", "explanation", "actionWhenViolated", "evidence"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "assetId": { "$ref": "#/$defs/id" }, "audience": { "enum": ["BUSINESS", "OPS", "EXPERT"] }, "title": { "type": "string", "minLength": 1 }, "explanation": { "type": "string", "minLength": 1 }, "actionWhenViolated": { "type": "string" }, "evidence": { "$ref": "#/$defs/evidence" } },
+      "additionalProperties": false
+    },
+    "runtimeOverlay": { "type": "object", "required": ["capturedAt", "observations"], "properties": { "capturedAt": { "type": "string", "format": "date-time" }, "observations": { "type": "array", "items": { "$ref": "#/$defs/runtimeObservation" } } }, "additionalProperties": false },
+    "runtimeObservation": { "type": "object", "required": ["id", "subjectId", "observedAt", "observationType", "attributes", "evidence"], "properties": { "id": { "$ref": "#/$defs/id" }, "subjectId": { "$ref": "#/$defs/id" }, "observedAt": { "type": "string", "format": "date-time" }, "observationType": { "type": "string", "minLength": 1 }, "attributes": { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }, "evidence": { "$ref": "#/$defs/evidence" } }, "additionalProperties": false },
+    "diagnostic": { "type": "object", "required": ["id", "severity", "code", "message"], "properties": { "id": { "$ref": "#/$defs/id" }, "severity": { "enum": ["INFO", "WARNING", "ERROR"] }, "code": { "type": "string", "minLength": 1 }, "message": { "type": "string", "minLength": 1 }, "locator": { "$ref": "#/$defs/locator" } }, "additionalProperties": false }
   }
 }

@@ -1,7 +1,7 @@
 package io.github.vicliu624.explicitarchitecture.atlas.server;
 
 import io.github.vicliu624.explicitarchitecture.atlas.application.api.AtlasBuildUseCase;
-import io.github.vicliu624.explicitarchitecture.atlas.application.api.AtlasSnapshotQueryUseCase;
+import io.github.vicliu624.explicitarchitecture.atlas.application.api.AtlasPackageQueryUseCase;
 
 import java.util.Objects;
 
@@ -13,20 +13,20 @@ import java.util.Objects;
 public final class AtlasServerComposition {
 
     private final AtlasBuildUseCase atlasBuildUseCase;
-    private final AtlasSnapshotQueryUseCase atlasSnapshotQueryUseCase;
+    private final AtlasPackageQueryUseCase atlasPackageQueryUseCase;
 
     public AtlasServerComposition(
             AtlasBuildUseCase atlasBuildUseCase,
-            AtlasSnapshotQueryUseCase atlasSnapshotQueryUseCase) {
+            AtlasPackageQueryUseCase atlasPackageQueryUseCase) {
         this.atlasBuildUseCase = Objects.requireNonNull(atlasBuildUseCase, "atlasBuildUseCase 不能为空");
-        this.atlasSnapshotQueryUseCase = Objects.requireNonNull(atlasSnapshotQueryUseCase, "atlasSnapshotQueryUseCase 不能为空");
+        this.atlasPackageQueryUseCase = Objects.requireNonNull(atlasPackageQueryUseCase, "atlasPackageQueryUseCase 不能为空");
     }
 
     public AtlasBuildUseCase atlasBuildUseCase() {
         return atlasBuildUseCase;
     }
 
-    public AtlasSnapshotQueryUseCase atlasSnapshotQueryUseCase() {
-        return atlasSnapshotQueryUseCase;
+    public AtlasPackageQueryUseCase atlasPackageQueryUseCase() {
+        return atlasPackageQueryUseCase;
     }
 }

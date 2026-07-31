@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vicliu624.github.io/explicit-architecture-atlas/schema/atlas-workspace-1.0.json",
+  "title": "Explicit Architecture Atlas Private Workspace 1.0",
+  "description": "Private local/deployment configuration. It must never be embedded in an Atlas Package.",
+  "type": "object",
+  "required": ["schemaVersion", "workspaceId", "project", "sources"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "workspaceId": { "$ref": "#/$defs/id" },
+    "project": {
+      "type": "object",
+      "required": ["id", "displayName"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "displayName": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "sources": {
+      "type": "object",
+      "required": ["projectRoot", "sourceArchives", "intentManifests"],
+      "properties": {
+        "projectRoot": { "type": "string", "minLength": 1 },
+        "sourceArchives": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "intentManifests": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false
+    },
+    "content": {
+      "type": "object",
+      "required": ["root"],
+      "properties": { "root": { "type": "string", "minLength": 1 } },
+      "additionalProperties": false
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["enabled"],
+      "properties": { "enabled": { "type": "boolean" } },
+      "additionalProperties": false
+    },
+    "conventionProfileFile": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "id": { "type": "string", "minLength": 1, "pattern": "^\\S+$" }
+  }
+}

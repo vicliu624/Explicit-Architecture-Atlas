@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vicliu624.github.io/explicit-architecture-atlas/schema/atlas-intent-1.0.json",
+  "title": "Explicit Architecture Atlas Intent Manifest 1.0",
+  "type": "object",
+  "required": ["schemaVersion", "declarations"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "declarations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/declaration" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "id": { "type": "string", "minLength": 1, "pattern": "^\\S+$" },
+    "assetKind": {
+      "enum": [
+        "BUSINESS_CONCEPT", "DOMAIN_CONSTRAINT", "DOMAIN_EVENT", "APPLICATION_USE_CASE",
+        "PROJECTION", "PROCESS_MANAGER", "ENDPOINT_OPERATION", "CODE_ELEMENT", "DATA_TARGET", "EXTERNAL_BOUNDARY"
+      ]
+    },
+    "value": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "array", "items": { "$ref": "#/$defs/value" } },
+        { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }
+      ]
+    },
+    "target": {
+      "type": "object",
+      "required": ["kind", "binaryName", "memberDescriptor"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "binaryName": { "type": "string", "minLength": 1 },
+        "memberDescriptor": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "declaration": {
+      "type": "object",
+      "required": ["id", "annotationType", "assetKind", "target", "attributes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "annotationType": { "type": "string", "minLength": 1 },
+        "assetKind": { "$ref": "#/$defs/assetKind" },
+        "target": { "$ref": "#/$defs/target" },
+        "attributes": { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -5,8 +5,9 @@ package io.github.vicliu624.explicitarchitecture.atlas.analysis.spi;
  *
  * <p>JVM、Maven、Spring、Axon、JPA 等分析器都只依赖此端口和领域模型，而不反向依赖 Web 或启动模块。</p>
  */
-@FunctionalInterface
 public interface SourceFactsAnalyzer {
 
-    AnalysisResult analyze(AnalysisRequest request);
+    AnalyzerDescriptor descriptor();
+
+    AnalyzerContribution analyze(AnalysisRequest request);
 }

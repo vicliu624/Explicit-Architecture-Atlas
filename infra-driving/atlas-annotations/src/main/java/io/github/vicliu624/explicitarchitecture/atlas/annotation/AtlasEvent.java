@@ -8,6 +8,7 @@ import java.lang.annotation.Target;
 
 /** 标注领域事件及其面向业务的事实描述。 */
 @Documented
+@AtlasIntent(assetKind = AtlasIntentKind.DOMAIN_EVENT)
 @Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.TYPE)
 public @interface AtlasEvent {

@@ -11,5 +11,6 @@ public enum DomainConstraintKind {
     EVENT_PRECONDITION,
     TEMPORAL,
     OWNERSHIP,
-    COMPENSATION
+    COMPENSATION,
+    CUSTOM
 }

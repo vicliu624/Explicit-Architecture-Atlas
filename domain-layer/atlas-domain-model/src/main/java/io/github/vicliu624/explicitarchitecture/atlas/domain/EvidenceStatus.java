@@ -4,5 +4,6 @@ package io.github.vicliu624.explicitarchitecture.atlas.domain;
 public enum EvidenceStatus {
     VERIFIED,
     PARTIAL,
-    PENDING
+    PENDING,
+    CONFLICTED
 }

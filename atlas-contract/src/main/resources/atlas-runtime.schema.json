@@ -1,14 +1,27 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://explicit-architecture-atlas.dev/schema/runtime/0.1.0",
-  "title": "Explicit Architecture Atlas Runtime Observation",
+  "$id": "https://explicit-architecture-atlas.dev/schema/runtime-overlay/1.0",
+  "title": "Explicit Architecture Atlas Runtime Overlay",
   "type": "object",
-  "required": ["assetId", "observedAt", "state"],
+  "required": ["schemaVersion", "capturedAt", "observations"],
   "properties": {
-    "assetId": { "type": "string", "minLength": 1 },
-    "observedAt": { "type": "string", "format": "date-time" },
-    "state": { "enum": ["HEALTHY", "WAITING", "DELAYED", "RETRYING", "FAILED", "UNKNOWN"] },
-    "message": { "type": "string" },
-    "metrics": { "type": "object", "additionalProperties": { "type": "number" } }
-  }
+    "schemaVersion": { "const": "1.0" },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "subjectId", "observedAt", "observationType", "attributes"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "subjectId": { "type": "string", "minLength": 1 },
+          "observedAt": { "type": "string", "format": "date-time" },
+          "observationType": { "type": "string", "minLength": 1 },
+          "attributes": { "type": "object" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
 }

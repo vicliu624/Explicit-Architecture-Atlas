@@ -8,6 +8,7 @@ import java.lang.annotation.Target;
 
 /** 标注一个外部接口操作的业务目的和调用入口。 */
 @Documented
+@AtlasIntent(assetKind = AtlasIntentKind.ENDPOINT_OPERATION)
 @Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.METHOD)
 public @interface AtlasEndpoint {

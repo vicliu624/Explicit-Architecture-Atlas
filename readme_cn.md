@@ -351,6 +351,8 @@ Atlas 在第一阶段不承担以下职责：
 
 ## 项目状态
 
-当前项目已完成第一步工程落底：可发布 Maven 工件的边界、独立 Web 边界、私有 Workspace 边界、版本化 Schema 资源、领域/应用/SPI 最小模型、编译期意图索引、通用 fixture、基础测试和 CI 校验均已建立。
+当前项目已完成第一条可执行的最终形态链路，而不是一次性原型：可发布 Maven 工件的边界、独立 Web 边界、私有 Workspace 边界、版本化 Schema、类型化 Atlas Package、事实/意图/内容/运行态的独立模型、能力覆盖与诊断、编译期意图索引、Maven/JVM 事实提取、文件型 Package 仓库、可执行 CLI 和端到端 fixture 测试均已建立。
 
-下一阶段将把最小适配器锚点扩展为真实提取能力：JVM 领域约束证据、Maven 模块图、Spring 调用链、Axon 事件/Saga、JPA 投影目的地与运行态观测；随后基于统一 Snapshot 实现业务、运维和专家三种角色化 Explorer。具体工作应继续遵守 [工程结构与 Maven 发布](docs/architecture/01-工程结构与Maven发布.md) 和 [依赖规则与装配](docs/architecture/02-依赖规则与装配.md) 的边界。
+当前 `atlas extract` 已经能够从严格显式架构样例中生成领域约束的业务说明、正则和源码证据，并恢复入口到领域方法的可确认调用边。没有实现的 Spring、Axon、JPA、运行态能力不会被渲染成“没有事件、Saga 或投影”，而会由 Package 的 `coverage` 明确表达为未启用或未实现。
+
+后续会以同一个 Package、同一个 Fact → Intent → Design Atlas 流水线继续接入 Spring 接口、Axon 事件/Saga、JPA 投影目的地、运行态 Overlay 和业务/运维/专家角色化 Explorer；不会推倒已存在的数据包、Workspace 或 CLI 边界。具体工作继续遵守 [工程结构与 Maven 发布](docs/architecture/01-工程结构与Maven发布.md) 和 [依赖规则与装配](docs/architecture/02-依赖规则与装配.md) 的边界。

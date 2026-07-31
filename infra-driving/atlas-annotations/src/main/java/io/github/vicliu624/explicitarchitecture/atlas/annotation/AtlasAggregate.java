@@ -8,6 +8,7 @@ import java.lang.annotation.Target;
 
 /** 标注聚合根、其业务名称和承担的一致性边界。 */
 @Documented
+@AtlasIntent(assetKind = AtlasIntentKind.BUSINESS_CONCEPT)
 @Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.TYPE)
 public @interface AtlasAggregate {

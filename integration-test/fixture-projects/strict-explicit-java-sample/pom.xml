@@ -7,6 +7,8 @@
     <properties><maven.deploy.skip>true</maven.deploy.skip></properties>
     <dependencies>
         <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-annotations</artifactId><version>${project.version}</version></dependency>
+        <!-- 使 Reactor 明确建立处理器编译顺序；provided 保证 fixture 运行时不携带处理器。 -->
+        <dependency><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-annotation-processor</artifactId><version>${project.version}</version><scope>provided</scope></dependency>
     </dependencies>
     <build>
         <plugins>

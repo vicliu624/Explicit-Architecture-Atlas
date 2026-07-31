@@ -1,42 +1,81 @@
 package io.github.vicliu624.explicitarchitecture.atlas.integration;
 
 import io.github.vicliu624.explicitarchitecture.atlas.application.api.AtlasBuildRequest;
-import io.github.vicliu624.explicitarchitecture.atlas.application.api.AtlasSnapshot;
-import io.github.vicliu624.explicitarchitecture.atlas.application.api.AtlasSnapshotRepository;
+import io.github.vicliu624.explicitarchitecture.atlas.application.api.AtlasPackageRepository;
 import io.github.vicliu624.explicitarchitecture.atlas.application.core.DefaultAtlasBuildService;
+import io.github.vicliu624.explicitarchitecture.atlas.application.core.DesignAtlasResolution;
+import io.github.vicliu624.explicitarchitecture.atlas.analysis.spi.AnalysisRequest;
+import io.github.vicliu624.explicitarchitecture.atlas.analysis.spi.AnalyzerContribution;
+import io.github.vicliu624.explicitarchitecture.atlas.analysis.spi.AnalyzerDescriptor;
+import io.github.vicliu624.explicitarchitecture.atlas.analysis.spi.SourceFactsAnalyzer;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasGraph;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasId;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasPackage;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.CapabilityStatus;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ContentBundle;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ConventionProfile;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.CoverageReport;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.IntentBundle;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** 验证应用层不依赖 Web、Spring、Axon 或文件系统即可完成基本编排。 */
+/** 验证应用层能在不依赖 Web、Spring、Axon 或文件系统的情况下编译可追溯 Package。 */
 class AtlasBuildFlowTest {
 
     @Test
-    void buildCreatesAndPersistsAnEmptySnapshotBeforeAnalyzersAreInstalled() {
+    void buildPersistsAPackageWithAnalyzerCoverageInsteadOfTreatingCoverageAsBusinessAbsence() {
         InMemoryRepository repository = new InMemoryRepository();
-        AtlasSnapshot snapshot = new DefaultAtlasBuildService(repository).build(new AtlasBuildRequest("sample"));
+        SourceFactsAnalyzer analyzer = new SourceFactsAnalyzer() {
+            @Override
+            public AnalyzerDescriptor descriptor() {
+                return new AnalyzerDescriptor(AtlasId.of("analyzer:test"), "测试分析器", "测试能力");
+            }
 
-        assertEquals("sample-empty", snapshot.id());
-        assertTrue(repository.findById(snapshot.id()).isPresent());
+            @Override
+            public AnalyzerContribution analyze(AnalysisRequest request) {
+                return new AnalyzerContribution(
+                        new CoverageReport("analyzer:test", CapabilityStatus.COMPLETE, request.scopeUri(), "测试范围已完成"),
+                        List.of(), List.of(), List.of());
+            }
+        };
+        AtlasPackage atlasPackage = new DefaultAtlasBuildService(
+                repository,
+                List.of(analyzer),
+                (facts, intents, content) -> new DesignAtlasResolution(AtlasGraph.empty(), List.of()))
+                .build(new AtlasBuildRequest(
+                        AtlasId.of("package:sample:working-tree"),
+                        AtlasId.of("project:sample"),
+                        Path.of("."),
+                        "working-tree",
+                        ConventionProfile.empty(),
+                        IntentBundle.empty(),
+                        ContentBundle.empty()));
+
+        assertEquals("package:sample:working-tree", atlasPackage.manifest().packageId().value());
+        assertEquals(CapabilityStatus.COMPLETE, atlasPackage.manifest().coverage().getFirst().status());
+        assertTrue(repository.findById(atlasPackage.manifest().packageId()).isPresent());
     }
 
-    private static final class InMemoryRepository implements AtlasSnapshotRepository {
+    private static final class InMemoryRepository implements AtlasPackageRepository {
 
-        private final Map<String, AtlasSnapshot> data = new HashMap<>();
+        private final Map<AtlasId, AtlasPackage> data = new HashMap<>();
 
         @Override
-        public void save(AtlasSnapshot snapshot) {
-            data.put(snapshot.id(), snapshot);
+        public void save(AtlasPackage atlasPackage) {
+            data.put(atlasPackage.manifest().packageId(), atlasPackage);
         }
 
         @Override
-        public Optional<AtlasSnapshot> findById(String snapshotId) {
-            return Optional.ofNullable(data.get(snapshotId));
+        public Optional<AtlasPackage> findById(AtlasId packageId) {
+            return Optional.ofNullable(data.get(packageId));
         }
     }
 }

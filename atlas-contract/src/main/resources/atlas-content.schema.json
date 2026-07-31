@@ -1,15 +1,27 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://explicit-architecture-atlas.dev/schema/content/0.1.0",
-  "title": "Explicit Architecture Atlas Business Content",
+  "$id": "https://explicit-architecture-atlas.dev/schema/content-bundle/1.0",
+  "title": "Explicit Architecture Atlas Content Bundle",
   "type": "object",
-  "required": ["assetId", "businessName"],
+  "required": ["schemaVersion", "entries"],
   "properties": {
-    "assetId": { "type": "string", "minLength": 1 },
-    "businessName": { "type": "string", "minLength": 1 },
-    "explanation": { "type": "string" },
-    "commonQuestions": { "type": "array", "items": { "type": "string" } },
-    "operationsGuide": { "type": "string" },
-    "owners": { "type": "array", "items": { "type": "string" } }
-  }
+    "schemaVersion": { "const": "1.0" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "assetId", "audience", "title", "explanation"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "assetId": { "type": "string", "minLength": 1 },
+          "audience": { "enum": ["BUSINESS", "OPS", "EXPERT"] },
+          "title": { "type": "string", "minLength": 1 },
+          "explanation": { "type": "string", "minLength": 1 },
+          "actionWhenViolated": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
 }

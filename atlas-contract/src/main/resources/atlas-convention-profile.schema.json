@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vicliu624.github.io/explicit-architecture-atlas/schema/atlas-convention-profile-1.0.json",
+  "title": "Explicit Architecture Atlas Convention Profile 1.0",
+  "type": "object",
+  "required": ["schemaVersion", "profileId", "bindings"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "profileId": { "$ref": "#/$defs/id" },
+    "bindings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/binding" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "id": { "type": "string", "minLength": 1, "pattern": "^\\S+$" },
+    "value": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "array", "items": { "$ref": "#/$defs/value" } },
+        { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }
+      ]
+    },
+    "binding": {
+      "type": "object",
+      "required": ["id", "matcherKind", "matcher", "emittedFactKind", "declaredAttributes", "summary"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "matcherKind": { "enum": ["ANNOTATION", "TYPE_ASSIGNABLE_TO", "METHOD_CALL", "PACKAGE_PREFIX"] },
+        "matcher": { "type": "string", "minLength": 1 },
+        "emittedFactKind": {
+          "enum": [
+            "PROJECT", "MAVEN_MODULE", "MAVEN_DEPENDENCY", "SOURCE_TYPE", "SOURCE_FIELD", "SOURCE_METHOD", "ANNOTATION", "VALIDATION_RULE",
+            "METHOD_CALL", "EVENT_PUBLICATION", "EVENT_CONSUMPTION", "PROJECTION_WRITE", "PROCESS_START",
+            "PROCESS_WAIT", "PROCESS_DISPATCH", "PROCESS_COMPLETION", "RUNTIME_MEASUREMENT"
+          ]
+        },
+        "declaredAttributes": { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } },
+        "summary": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

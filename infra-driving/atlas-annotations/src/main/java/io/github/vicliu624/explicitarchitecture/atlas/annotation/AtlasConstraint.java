@@ -12,6 +12,7 @@ import java.lang.annotation.Target;
  * <p>例如，身份格式约束可将正则表达式置于 {@link #expression()}；渲染器据此生成“为何不可录入”的业务说明。</p>
  */
 @Documented
+@AtlasIntent(assetKind = AtlasIntentKind.DOMAIN_CONSTRAINT)
 @Retention(RetentionPolicy.SOURCE)
 @Target({ElementType.TYPE, ElementType.FIELD, ElementType.METHOD, ElementType.RECORD_COMPONENT})
 public @interface AtlasConstraint {

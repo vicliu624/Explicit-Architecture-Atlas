@@ -7,4 +7,4 @@ It is intentionally generic: Atlas is not tied to any particular business reposi
 - [中文产品说明](readme_cn.md)
 - [中文工程与发布文档](docs/README.md)
 
-The current repository is an executable architectural foundation: Maven modules compile as a reactor, annotations emit a compile-time intent index in the generic fixture, and structural checks keep Maven/Web/Workspace boundaries explicit.
+The current repository has its first executable extraction slice: annotations emit a typed intent manifest; Maven and JDK AST adapters emit verifiable facts; the resolver compiles them into a versioned Atlas Package with coverage/diagnostics; and the shaded CLI persists it into a private Workspace. Spring, Axon, JPA destinations, runtime overlays, and the role-aware Web explorer remain separate forthcoming adapters rather than being represented as false negatives.
