@@ -4,6 +4,12 @@ All notable changes to Explicit Architecture Atlas are documented in this file.
 
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html). A release tag is always `v<project.version>`.
 
+## [Unreleased]
+
+### Fixed
+
+- Preserved the Actions `GITHUB_TOKEN` for the clean GitHub Packages consumer-resolution check and added a safe manual recovery path that verifies an already deployed tag and creates its GitHub Release without attempting to republish immutable Maven artifacts.
+
 ## [0.0.1] - 2026-08-21
 
 ### Added
