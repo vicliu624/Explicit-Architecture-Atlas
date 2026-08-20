@@ -55,10 +55,12 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -106,10 +108,12 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
         try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(compilerDiagnostics, null, StandardCharsets.UTF_8)) {
             Iterable<? extends JavaFileObject> units = fileManager.getJavaFileObjectsFromPaths(sourceFiles);
             JavacTask task = (JavacTask) compiler.getTask(null, fileManager, compilerDiagnostics, List.of("-proc:none"), null, units);
-            Iterable<? extends CompilationUnitTree> compilationUnits = task.parse();
+            List<CompilationUnitTree> compilationUnits = new ArrayList<>();
+            task.parse().forEach(compilationUnits::add);
             Trees trees = Trees.instance(task);
+            Map<String, Set<String>> knownSourceTypesBySimpleName = knownSourceTypesBySimpleName(compilationUnits);
             for (CompilationUnitTree unit : compilationUnits) {
-                new SourceScanner(request, unit, trees).scan(unit, facts);
+                new SourceScanner(request, unit, trees, knownSourceTypesBySimpleName).scan(unit, facts);
             }
         } catch (IOException exception) {
             throw new IllegalStateException("无法读取 Java 源文件", exception);
@@ -131,6 +135,30 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
                 facts.stream().sorted(Comparator.comparing(SourceFact::id)).toList(),
                 List.of(),
                 diagnostics);
+    }
+
+    /**
+     * 仅从本轮实际解析到的顶层声明建立简单名索引，供 {@code import a.b.*} 的保守类型归一化使用。
+     *
+     * <p>JVM 事实和 Spring/Axon 事实必须使用同一条“源码可证明才归一”的规则；否则 Axon 能把 CommandHandler
+     * 定位到完全限定签名，而 JVM 方法/参数事实仍保留同包伪类型，两者不能收敛到同一个 CodeElement。</p>
+     */
+    private static Map<String, Set<String>> knownSourceTypesBySimpleName(List<CompilationUnitTree> units) {
+        Map<String, Set<String>> types = new HashMap<>();
+        for (CompilationUnitTree unit : units) {
+            String packageName = unit.getPackageName() == null ? "" : unit.getPackageName().toString();
+            for (Tree declaration : unit.getTypeDecls()) {
+                if (declaration instanceof ClassTree type && !type.getSimpleName().toString().isBlank()) {
+                    String qualifiedName = packageName.isEmpty()
+                            ? type.getSimpleName().toString()
+                            : packageName + "." + type.getSimpleName();
+                    types.computeIfAbsent(type.getSimpleName().toString(), ignored -> new LinkedHashSet<>()).add(qualifiedName);
+                }
+            }
+        }
+        Map<String, Set<String>> immutable = new HashMap<>();
+        types.forEach((simpleName, candidates) -> immutable.put(simpleName, Set.copyOf(candidates)));
+        return Map.copyOf(immutable);
     }
 
     private static AtlasDiagnostic compilerDiagnostic(AnalysisRequest request, Diagnostic<? extends JavaFileObject> diagnostic) {
@@ -165,17 +193,25 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
         private final Path sourceFile;
         private final String packageName;
         private final Map<String, String> explicitImports;
+        private final Set<String> onDemandImportPackages;
+        private final Map<String, Set<String>> knownSourceTypesBySimpleName;
         private final List<String> typeStack = new ArrayList<>();
         private String currentMethodSubject;
         private String currentMethodReturnType;
 
-        private SourceScanner(AnalysisRequest request, CompilationUnitTree unit, Trees trees) {
+        private SourceScanner(
+                AnalysisRequest request,
+                CompilationUnitTree unit,
+                Trees trees,
+                Map<String, Set<String>> knownSourceTypesBySimpleName) {
             this.request = request;
             this.unit = unit;
             this.positions = trees.getSourcePositions();
             this.sourceFile = Path.of(unit.getSourceFile().toUri()).toAbsolutePath().normalize();
             this.packageName = unit.getPackageName() == null ? "" : unit.getPackageName().toString();
             this.explicitImports = importsOf(unit);
+            this.onDemandImportPackages = onDemandImportPackagesOf(unit);
+            this.knownSourceTypesBySimpleName = knownSourceTypesBySimpleName;
         }
 
         @Override
@@ -451,14 +487,26 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
             if (raw.contains(".")) {
                 String firstSegment = raw.substring(0, raw.indexOf('.'));
                 String imported = explicitImports.get(firstSegment);
-                return (imported == null ? raw : imported + raw.substring(firstSegment.length())) + suffix;
+                if (imported != null) {
+                    return imported + raw.substring(firstSegment.length()) + suffix;
+                }
+                Optional<String> wildcardResolved = resolveImportedSourceType(firstSegment);
+                if (wildcardResolved.isPresent()) {
+                    return wildcardResolved.get() + raw.substring(firstSegment.length()) + suffix;
+                }
+                return raw + suffix;
             }
             if (JAVA_LANG_TYPES.contains(raw) || raw.equals("boolean") || raw.equals("byte") || raw.equals("short")
                     || raw.equals("int") || raw.equals("long") || raw.equals("float") || raw.equals("double")
                     || raw.equals("char") || raw.equals("void")) {
                 return (JAVA_LANG_TYPES.contains(raw) ? "java.lang." : "") + raw + suffix;
             }
-            return explicitImports.getOrDefault(raw, packageName.isEmpty() ? raw : packageName + "." + raw) + suffix;
+            String explicitlyImported = explicitImports.get(raw);
+            if (explicitlyImported != null) {
+                return explicitlyImported + suffix;
+            }
+            return resolveImportedSourceType(raw)
+                    .orElse(packageName.isEmpty() ? raw : packageName + "." + raw) + suffix;
         }
 
         private SourceRange rangeOf(Tree tree) {
@@ -498,6 +546,27 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
                 }
             });
             return Map.copyOf(imports);
+        }
+
+        private static Set<String> onDemandImportPackagesOf(CompilationUnitTree unit) {
+            Set<String> packages = new LinkedHashSet<>();
+            unit.getImports().forEach(importTree -> {
+                if (!importTree.isStatic()) {
+                    String qualified = importTree.getQualifiedIdentifier().toString();
+                    if (qualified.endsWith(".*")) {
+                        packages.add(qualified.substring(0, qualified.length() - 2));
+                    }
+                }
+            });
+            return Set.copyOf(packages);
+        }
+
+        /** 只有按需导入的项目源码中存在唯一候选时才收敛简单名；外部 classpath 候选绝不猜测。 */
+        private Optional<String> resolveImportedSourceType(String simpleName) {
+            Set<String> candidates = knownSourceTypesBySimpleName.getOrDefault(simpleName, Set.of()).stream()
+                    .filter(candidate -> onDemandImportPackages.contains(candidate.substring(0, candidate.lastIndexOf('.'))))
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+            return candidates.size() == 1 ? Optional.of(candidates.iterator().next()) : Optional.empty();
         }
 
         private static Invocation invocationOf(ExpressionTree methodSelect, String enclosingType) {

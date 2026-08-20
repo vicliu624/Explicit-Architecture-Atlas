@@ -445,10 +445,60 @@ public final class DefaultAtlasRoleViewQuery implements AtlasRoleViewQueryUseCas
                 asset.evidence().stream().filter(evidence -> visibleTo(evidence, Role.EXPERT)).map(DefaultAtlasRoleViewQuery::evidence).toList(),
                 relationViews(index.incoming(asset.id()), index, Role.EXPERT),
                 relationViews(index.outgoing(asset.id()), index, Role.EXPERT),
+                functionContracts(index, asset),
                 runtimeObservations(atlasPackage, asset.id()),
                 source.map(code -> new ExpertAtlasView.SourceReference(
                                 code.locator().uri().startsWith("project://"), code.qualifiedName(), location(code.locator())))
                         .orElseGet(() -> new ExpertAtlasView.SourceReference(false, "", emptyLocation())));
+    }
+
+    /**
+     * 将源码元素背后的 OperationContract 展开到同一个专家详情中。
+     *
+     * <p>源码分析阶段已经保存 ACCEPTS / RETURNS / ARGUMENT_BINDS_TO / RETURN_FLOWS_TO；若只展示代码元素的
+     * CALLS 边，使用者仍需自行跨越 REPRESENTS 边才能解释函数契约。这里仅投影已有事实，且关联边仍保留完整
+     * evidence，不能唯一解析的实参绑定自然不会出现。</p>
+     */
+    private static List<ExpertAtlasView.FunctionContract> functionContracts(Index index, ArchitectureAsset asset) {
+        List<OperationContract> operations = new ArrayList<>();
+        if (asset instanceof OperationContract operation) {
+            operations.add(operation);
+        }
+        index.incoming(asset.id(), RelationKind.REPRESENTS).stream()
+                .map(AtlasRelation::sourceId).map(index::asset).flatMap(Optional::stream)
+                .filter(OperationContract.class::isInstance).map(OperationContract.class::cast)
+                .forEach(operations::add);
+        return operations.stream().collect(Collectors.toMap(OperationContract::id, operation -> operation,
+                        (first, ignored) -> first, LinkedHashMap::new)).values().stream()
+                .sorted(Comparator.comparing(OperationContract::id))
+                .map(operation -> functionContract(index, operation)).toList();
+    }
+
+    private static ExpertAtlasView.FunctionContract functionContract(Index index, OperationContract operation) {
+        List<ExpertAtlasView.FunctionValue> inputs = index.outgoing(operation.id(), RelationKind.ACCEPTS).stream()
+                .map(AtlasRelation::targetId).map(index::asset).flatMap(Optional::stream)
+                .sorted(Comparator.comparingInt(DefaultAtlasRoleViewQuery::parameterIndex)
+                        .thenComparing(ArchitectureAsset::id))
+                .map(value -> functionValue(index, value, "INPUT", RelationKind.ARGUMENT_BINDS_TO)).toList();
+        List<ExpertAtlasView.FunctionValue> outputs = index.outgoing(operation.id(), RelationKind.RETURNS).stream()
+                .map(AtlasRelation::targetId).map(index::asset).flatMap(Optional::stream)
+                .sorted(Comparator.comparing(ArchitectureAsset::id))
+                .map(value -> functionValue(index, value, "RETURN", RelationKind.RETURN_FLOWS_TO)).toList();
+        return new ExpertAtlasView.FunctionContract(reference(operation), operation.javaSignature(), inputs, outputs);
+    }
+
+    private static ExpertAtlasView.FunctionValue functionValue(
+            Index index,
+            ArchitectureAsset value,
+            String role,
+            RelationKind associationKind) {
+        return new ExpertAtlasView.FunctionValue(role, reference(value), properties(value),
+                relationViews(index.incoming(value.id(), associationKind), index, Role.EXPERT));
+    }
+
+    private static int parameterIndex(ArchitectureAsset asset) {
+        AtlasValue index = asset.attributes().get("parameterIndex");
+        return index instanceof AtlasValue.Decimal decimal ? decimal.value().intValue() : Integer.MAX_VALUE;
     }
 
     private List<ExpertAtlasView.RuntimeObservation> runtimeObservations(AtlasPackage atlasPackage, AtlasId assetId) {

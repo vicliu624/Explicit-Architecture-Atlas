@@ -574,12 +574,40 @@ function assetDetail(detail) {
     ${detail.source.available ? `<button class="button button--primary" data-action="source" data-asset-id="${escapeAttr(detail.asset.id)}">查看受控源码</button>` : `<p class="source-unavailable">此资产没有可用的受控 source JAR 定位。</p>`}
     ${state.source ? sourcePanel(state.source) : ""}
     ${labeledProperties("资产属性", detail.properties)}
+    ${functionContracts(detail.functionContracts)}
     ${narratives(detail.narratives)}
     ${evidenceList(detail.evidence)}
     ${relationGroup("指向此资产的关系", detail.incomingRelations)}
     ${relationGroup("从此资产发出的关系", detail.outgoingRelations)}
     ${runtimeObservationList(detail.runtimeObservations)}
   </div>`;
+}
+
+function functionContracts(contracts) {
+  if (!contracts?.length) return "";
+  return `<section class="function-contracts"><h3>函数契约与值流</h3>${contracts.map(functionContract).join("")}</section>`;
+}
+
+function functionContract(contract) {
+  return `<article class="function-contract">
+    ${interactiveAssetInline(contract.operation)}
+    <code>${escapeHtml(contract.javaSignature)}</code>
+    ${functionValues("入参", contract.inputs)}
+    ${functionValues("返回值", contract.outputs)}
+  </article>`;
+}
+
+function functionValues(title, values) {
+  if (!values?.length) return `<section class="function-value-group"><h4>${escapeHtml(title)}</h4><p class="muted">无。</p></section>`;
+  return `<section class="function-value-group"><h4>${escapeHtml(title)}</h4>${values.map(functionValue).join("")}</section>`;
+}
+
+function functionValue(value) {
+  return `<article class="function-value">
+    <div><span class="relation-kind">${escapeHtml(value.role)}</span>${interactiveAssetInline(value.value)}</div>
+    ${labeledProperties("值属性", value.properties)}
+    ${interactiveRelationGroup("已证明的跨函数值关联", value.associations)}
+  </article>`;
 }
 
 function sourcePanel(source) {
@@ -595,6 +623,11 @@ function diagnosticsPanel(diagnostics, title) {
 
 function relationGroup(title, relations) {
   return `<div class="relation-group"><h4>${escapeHtml(title)}</h4>${relations.length ? `<ul class="relation-list">${relations.map((relation) => `<li><span class="relation-kind">${escapeHtml(relation.kind)}</span>${assetInline(relation.source)}<span aria-hidden="true">→</span>${assetInline(relation.target)}${relationEvidence([relation])}</li>`).join("")}</ul>` : "<p class=\"muted\">没有可展示的已证明关系。</p>"}</div>`;
+}
+
+function interactiveRelationGroup(title, relations) {
+  if (!relations?.length) return "";
+  return `<div class="relation-group"><h4>${escapeHtml(title)}</h4><ul class="relation-list">${relations.map((relation) => `<li><span class="relation-kind">${escapeHtml(relation.kind)}</span>${interactiveAssetInline(relation.source)}<span aria-hidden="true">→</span>${interactiveAssetInline(relation.target)}${relationEvidence([relation])}</li>`).join("")}</ul></div>`;
 }
 
 function relationEvidence(relations) {

@@ -14,7 +14,7 @@ flowchart LR
   Api --> Source["/source\n显式、受控的源码正文"]
 ```
 
-这样，业务人员不需要打开开发者工具或源码，运维人员不会把“未采集”读成成功，专家也只在需要时、且服务端明确允许时，才查看 `src.jar` 中的正文。
+这样，业务人员不需要打开开发者工具或源码，运维人员不会把“未采集”读成成功，专家也只在需要时、且服务端明确允许时，才查看 Workspace 已声明的工程源码或 `src.jar` 中的正文。
 
 ## 页面如何对应三种角色
 
@@ -22,7 +22,7 @@ flowchart LR
 | --- | --- | --- | --- |
 | 业务地图 | `/business` | 规则是什么？事件发生后谁处理、哪里可见？Saga 在等待什么？接口做什么？ | Java 全限定名、调用栈、事件存储实现细节 |
 | 运行态 | `/operations` | 哪个 Projection / Process Manager 成功、失败、积压或重试？受影响的目标和处理建议是什么？ | 原始 payload、异常正文、堆栈、未白名单属性 |
-| 专家模式 | `/expert`、`/assets/{id}` | 哪条静态关系证明了结论？接口调用如何展开？源码在哪里？ | Workspace 绝对路径、任意本机文件 |
+| 专家模式 | `/expert`、`/assets/{id}` | 哪条静态关系证明了结论？接口调用如何展开？函数收什么、返回什么、值如何跨函数绑定？源码在哪里？ | Workspace 绝对路径、任意本机文件 |
 
 专家模式的“查看受控源码”是用户动作触发的第二次查询；它不是默认加载内容。若服务没有 `--enable-expert-source`，界面会直接展示服务端的 `EXPERT_SOURCE_DISABLED` 说明。
 
@@ -32,7 +32,7 @@ flowchart LR
 
 ```powershell
 & 'C:\Program Files\Java\jdk-22\bin\java.exe' -jar `
-  .\ui-layer\atlas-server-bootstrap\target\explicit-architecture-atlas-server-bootstrap-0.1.0-SNAPSHOT-runner.jar `
+  .\ui-layer\atlas-server-bootstrap\target\explicit-architecture-atlas-server-bootstrap-0.0.1-runner.jar `
   --workspace .\workspace\local\atlas-workspace.yaml `
   --port 8080
 ```
@@ -80,6 +80,7 @@ npm run check
 ## 渲染边界
 
 - Web 只渲染 `/business`、`/operations`、`/expert` 和专家资产详情；不读取原始 `AtlasPackage` JSON。
+- 打开方法源码节点时，资产详情会同时投影其 `OperationContract`：按声明顺序的输入、返回值，以及已证明的 `ARGUMENT_BINDS_TO` / `RETURN_FLOWS_TO` 值关联。它不把无法唯一静态解析的绑定伪装成确定结论。
 - 业务页面不能从专家调用链反推或编造业务流程。
 - 运行态的 `NOT_CAPTURED`、`UNKNOWN`、`FAILED`、`LAGGING`、`RETRYING` 必须使用不同的文字和视觉状态，不能统一显示为正常。
 - 从 Package 返回的所有文本都按不可信文本处理并进行 HTML 转义；源码正文只放在 `<pre><code>` 中。

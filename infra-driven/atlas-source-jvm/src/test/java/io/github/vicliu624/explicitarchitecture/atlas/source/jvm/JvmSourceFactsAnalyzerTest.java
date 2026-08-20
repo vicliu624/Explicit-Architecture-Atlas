@@ -173,6 +173,35 @@ class JvmSourceFactsAnalyzerTest {
         assertEquals("example.RemotePaymentGateway", ((AtlasValue.Text) retrying.attributes().get("extendsType")).value());
     }
 
+    @Test
+    void normalizesWildcardImportedParameterAndReturnTypesToTheSameMethodIdentityUsedByFrameworkAdapters() throws IOException {
+        Path command = project.resolve("src/main/java/example/command/Submit.java");
+        Path result = project.resolve("src/main/java/example/command/Submission.java");
+        Path handler = project.resolve("src/main/java/example/handler/SubmitHandler.java");
+        Files.createDirectories(command.getParent());
+        Files.createDirectories(handler.getParent());
+        Files.writeString(command, "package example.command; public class Submit {}\n");
+        Files.writeString(result, "package example.command; public class Submission {}\n");
+        Files.writeString(handler, """
+                package example.handler;
+                import example.command.*;
+                final class SubmitHandler {
+                    Submission handle(Submit command) { return new Submission(); }
+                }
+                """);
+
+        AnalyzerContribution contribution = new JvmSourceFactsAnalyzer().analyze(
+                new AnalysisRequest(AtlasId.of("project:wildcard-method"), project, "revision:test"));
+
+        String method = "example.handler.SubmitHandler#handle(example.command.Submit)";
+        var sourceMethod = contribution.facts().stream()
+                .filter(fact -> fact.kind() == FactKind.SOURCE_METHOD && fact.subject().equals(method))
+                .findFirst().orElseThrow();
+        assertEquals("example.command.Submission", ((AtlasValue.Text) sourceMethod.attributes().get("returnType")).value());
+        assertTrue(contribution.facts().stream().anyMatch(fact -> fact.kind() == FactKind.SOURCE_PARAMETER
+                && fact.subject().equals(method + "::parameter[0]:command")));
+    }
+
     private static void writeType(Path source, String type) throws IOException {
         Files.createDirectories(source.getParent());
         Files.writeString(source, "package example; final class " + type + " {}\n");

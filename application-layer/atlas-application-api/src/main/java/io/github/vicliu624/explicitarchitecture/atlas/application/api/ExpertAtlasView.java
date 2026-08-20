@@ -138,6 +138,7 @@ public record ExpertAtlasView(
             List<AtlasEvidenceView> evidence,
             List<AtlasRelationView> incomingRelations,
             List<AtlasRelationView> outgoingRelations,
+            List<FunctionContract> functionContracts,
             List<RuntimeObservation> runtimeObservations,
             SourceReference source) {
         public AssetDetail {
@@ -148,8 +149,43 @@ public record ExpertAtlasView(
             evidence = immutable(evidence, "evidence");
             incomingRelations = immutable(incomingRelations, "incomingRelations");
             outgoingRelations = immutable(outgoingRelations, "outgoingRelations");
+            functionContracts = immutable(functionContracts, "functionContracts");
             runtimeObservations = immutable(runtimeObservations, "runtimeObservations");
             Objects.requireNonNull(source, "source 不能为空");
+        }
+    }
+
+    /**
+     * 某个源码方法在 Atlas 图中的可执行契约。
+     *
+     * <p>这不是把 Java 签名复制成一段字符串：每个输入、输出均指向独立的语义值资产，关联边说明调用方的哪一个
+     * 实参已经被证明绑定到该参数，以及该方法中哪一个输入直接流向返回值。无法静态唯一解析的流不会伪造到此视图。
+     * 一个代码元素理论上可被多个契约表示，因此使用列表以保留这种显式多义性。</p>
+     */
+    public record FunctionContract(
+            AtlasAssetReference operation,
+            String javaSignature,
+            List<FunctionValue> inputs,
+            List<FunctionValue> outputs) {
+        public FunctionContract {
+            Objects.requireNonNull(operation, "operation 不能为空");
+            javaSignature = required(javaSignature, "javaSignature");
+            inputs = immutable(inputs, "inputs");
+            outputs = immutable(outputs, "outputs");
+        }
+    }
+
+    /** 函数输入或输出值，以及与其他函数参数/返回值的已证明关联。 */
+    public record FunctionValue(
+            String role,
+            AtlasAssetReference value,
+            List<AtlasProperty> properties,
+            List<AtlasRelationView> associations) {
+        public FunctionValue {
+            role = required(role, "role");
+            Objects.requireNonNull(value, "value 不能为空");
+            properties = immutable(properties, "properties");
+            associations = immutable(associations, "associations");
         }
     }
 
