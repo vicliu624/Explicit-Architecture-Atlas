@@ -6,12 +6,34 @@ import java.util.List;
 import java.util.Objects;
 
 /** 项目源码、源码归档和编译期意图 Manifest 的私有输入位置。 */
-public record WorkspaceSources(Path projectRoot, List<Path> sourceArchives, List<Path> intentManifests) {
+public record WorkspaceSources(
+        Path projectRoot,
+        List<Path> sourceRoots,
+        List<Path> excludedPaths,
+        List<Path> sourceArchives,
+        List<Path> intentManifests) {
 
     public WorkspaceSources {
         projectRoot = Objects.requireNonNull(projectRoot, "projectRoot 不能为空").toAbsolutePath().normalize();
+        sourceRoots = normalizeProjectPaths(projectRoot, sourceRoots, "sourceRoots");
+        excludedPaths = normalizeProjectPaths(projectRoot, excludedPaths, "excludedPaths");
         sourceArchives = normalizePaths(sourceArchives, "sourceArchives");
         intentManifests = normalizePaths(intentManifests, "intentManifests");
+    }
+
+    public WorkspaceSources(Path projectRoot, List<Path> sourceArchives, List<Path> intentManifests) {
+        this(projectRoot, List.of(), List.of(), sourceArchives, intentManifests);
+    }
+
+    private static List<Path> normalizeProjectPaths(Path projectRoot, List<Path> paths, String name) {
+        return List.copyOf(Objects.requireNonNull(paths, name + " 不能为空").stream()
+                .map(path -> Objects.requireNonNull(path, name + " 不能包含 null").toAbsolutePath().normalize())
+                .peek(path -> {
+                    if (!path.startsWith(projectRoot)) {
+                        throw new IllegalArgumentException(name + " 必须位于 projectRoot 内: " + path);
+                    }
+                })
+                .distinct().sorted(Comparator.comparing(Path::toString)).toList());
     }
 
     private static List<Path> normalizePaths(List<Path> paths, String name) {

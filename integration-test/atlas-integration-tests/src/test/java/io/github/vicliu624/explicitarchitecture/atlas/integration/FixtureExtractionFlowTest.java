@@ -2,6 +2,7 @@ package io.github.vicliu624.explicitarchitecture.atlas.integration;
 
 import io.github.vicliu624.explicitarchitecture.atlas.application.api.AtlasBuildRequest;
 import io.github.vicliu624.explicitarchitecture.atlas.application.core.DefaultAtlasBuildService;
+import io.github.vicliu624.explicitarchitecture.atlas.application.core.DefaultConfigurationScenarioResolver;
 import io.github.vicliu624.explicitarchitecture.atlas.application.core.DefaultDesignAtlasResolver;
 import io.github.vicliu624.explicitarchitecture.atlas.application.core.DefaultAtlasRoleViewQuery;
 import io.github.vicliu624.explicitarchitecture.atlas.application.api.RuntimeOverlayCompileRequest;
@@ -10,9 +11,13 @@ import io.github.vicliu624.explicitarchitecture.atlas.application.core.Repositor
 import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasId;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasPackage;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasValue;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.AssetMetadata;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.CapabilityStatus;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.CodeElement;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.ContentBundle;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ConfigurationScenario;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ConditionStatus;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ComponentDefinition;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.ConventionProfile;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.DataTarget;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.DataTargetKind;
@@ -23,12 +28,14 @@ import io.github.vicliu624.explicitarchitecture.atlas.domain.EvidenceOrigin;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.EvidenceClaim;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.EvidenceStatus;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.EvidenceVisibility;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.IntentBundle;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.EndpointOperation;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.RelationKind;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.RuntimeHandlingStatus;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.RuntimeHealthStatus;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.RuntimeSignal;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.RuntimeSignalBatch;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ScenarioInvocationStatus;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.SourceLocator;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.SourceRange;
 import io.github.vicliu624.explicitarchitecture.atlas.source.axon.AxonSourceFactsAnalyzer;
@@ -195,9 +202,83 @@ class FixtureExtractionFlowTest {
         assertTrue(expert.eventTraces().stream().anyMatch(trace -> trace.event().id().equals("sample-order-created")
                 && !trace.consumptionRelations().isEmpty()
                 && trace.projectionDestinations().stream().anyMatch(destination -> destination.projection().id().equals("sample-order-summary"))));
-        assertTrue(expert.endpointTraces().stream().anyMatch(trace -> trace.endpoint().id().equals("sample-order-create")
-                && trace.directEffects().stream().anyMatch(effect -> effect.kind().equals("DISPATCHES"))));
+        var endpointTrace = expert.endpointTraces().stream().filter(trace -> trace.endpoint().id().equals("sample-order-create"))
+                .findFirst().orElseThrow();
+        assertTrue(endpointTrace.directEffects().stream().anyMatch(effect -> effect.kind().equals("DISPATCHES")));
+        assertTrue(endpointTrace.executionGraph().nodes().isEmpty(), "专家首页必须保持轻量，不可一次性展开所有端点图");
+        endpointTrace = views.findExpertEndpointTrace(atlasPackage.manifest().packageId(), AtlasId.of("sample-order-create")).orElseThrow();
+        assertTrue(endpointTrace.executionGraph().relations().stream().anyMatch(relation -> relation.relation().kind().equals("HANDLES")
+                && relation.traversalDirection().equals("REVERSE")), endpointTrace.executionGraph().relations().toString());
         assertTrue(views.findExpertAssetDetail(atlasPackage.manifest().packageId(), AtlasId.of("sample-order-summary")).isPresent());
+    }
+
+    @Test
+    void resolvesAnActualSpringInterfaceCallToTheBeanSelectedByTheScenario() throws Exception {
+        Path project = workspace.resolve("scenario-project");
+        Path source = project.resolve("src/main/java/example/PaymentConfiguration.java");
+        Files.createDirectories(source.getParent());
+        Files.writeString(source, """
+                package example;
+
+                interface PaymentGateway {
+                    String charge(String orderId);
+                }
+
+                @Service
+                class RemotePaymentGateway implements PaymentGateway {
+                    public String charge(String orderId) { return "remote:" + orderId; }
+                }
+
+                @Service
+                @Profile("local")
+                class LocalPaymentGateway implements PaymentGateway {
+                    public String charge(String orderId) { return "local:" + orderId; }
+                }
+
+                @Service
+                class PaymentService {
+                    private final PaymentGateway gateway;
+                    PaymentService(PaymentGateway gateway) { this.gateway = gateway; }
+                    String pay(String orderId) { return gateway.charge(orderId); }
+                }
+                """);
+        AtlasPackageFileRepository repository = new AtlasPackageFileRepository(new AtlasWorkspacePaths(workspace.resolve("scenario-output")));
+        AtlasPackage atlasPackage = new DefaultAtlasBuildService(
+                repository, List.of(new JvmSourceFactsAnalyzer(), new SpringSourceFactsAnalyzer()), new DefaultDesignAtlasResolver())
+                .build(new AtlasBuildRequest(
+                        AtlasId.of("package:scenario:integration"), AtlasId.of("project:scenario:integration"), project,
+                        "scenario-revision", ConventionProfile.empty(), IntentBundle.empty(), ContentBundle.empty()));
+        Evidence scenarioEvidence = new Evidence(
+                AtlasId.of("evidence:scenario:integration"), EvidenceOrigin.WORKSPACE_CONFIGURATION, EvidenceClaim.DECLARED,
+                EvidenceStatus.VERIFIED,
+                new SourceLocator("document://scenario/production", "production", SourceRange.unknown()), "scenario-revision",
+                EvidenceVisibility.EXPERT_ONLY, "integration-test", "受控测试场景");
+        ConfigurationScenario scenario = new ConfigurationScenario(
+                new AssetMetadata(AtlasId.of("scenario:production"), "production", Map.of(), List.of(scenarioEvidence)),
+                List.of("prod"), Map.of(), List.of());
+
+        var resolution = new DefaultConfigurationScenarioResolver().resolve(atlasPackage, scenario);
+
+        assertTrue(atlasPackage.designAtlas().relations().stream().anyMatch(relation -> relation.kind() == RelationKind.IMPLEMENTS));
+        AtlasId remoteGateway = atlasPackage.designAtlas().nodes().stream().filter(ComponentDefinition.class::isInstance)
+                .map(ComponentDefinition.class::cast).filter(component -> component.beanName().equals("remotePaymentGateway"))
+                .findFirst().orElseThrow().id();
+        AtlasId localGateway = atlasPackage.designAtlas().nodes().stream().filter(ComponentDefinition.class::isInstance)
+                .map(ComponentDefinition.class::cast).filter(component -> component.beanName().equals("localPaymentGateway"))
+                .findFirst().orElseThrow().id();
+        assertTrue(resolution.components().stream().anyMatch(status -> status.status() == ConditionStatus.ACTIVE
+                && status.componentId().equals(remoteGateway)));
+        assertTrue(resolution.components().stream().anyMatch(status -> status.status() == ConditionStatus.EXCLUDED
+                && status.componentId().equals(localGateway)));
+        Map<AtlasId, CodeElement> codeById = atlasPackage.designAtlas().nodes().stream().filter(CodeElement.class::isInstance)
+                .map(CodeElement.class::cast).collect(java.util.stream.Collectors.toMap(CodeElement::id, code -> code));
+        var invocation = resolution.invocations().stream()
+                .filter(item -> codeById.get(item.callerCodeId()).qualifiedName().contains("PaymentService")
+                        && codeById.get(item.staticTargetCodeId()).qualifiedName().contains("PaymentGateway"))
+                .findFirst().orElseThrow(() -> new AssertionError(resolution.invocations().toString()));
+        assertEquals(ScenarioInvocationStatus.RESOLVED, invocation.status(), String.join("；", invocation.reasons()));
+        assertTrue(invocation.effectiveTargetCodeIds().stream().map(codeById::get)
+                .anyMatch(code -> code.qualifiedName().contains("RemotePaymentGateway#charge")));
     }
 
     private static DomainEvent event(AtlasPackage atlasPackage, String id) {

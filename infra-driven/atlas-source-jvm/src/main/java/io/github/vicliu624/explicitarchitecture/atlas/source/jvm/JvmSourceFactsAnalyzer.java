@@ -1,17 +1,23 @@
 package io.github.vicliu624.explicitarchitecture.atlas.source.jvm;
 
 import com.sun.source.tree.AnnotationTree;
+import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.IfTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.NewClassTree;
+import com.sun.source.tree.ReturnTree;
 import com.sun.source.tree.Tree;
+import com.sun.source.tree.ThrowTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.util.JavacTask;
 import com.sun.source.util.SourcePositions;
+import com.sun.source.util.TreeScanner;
 import com.sun.source.util.TreePathScanner;
 import com.sun.source.util.Trees;
 import io.github.vicliu624.explicitarchitecture.atlas.analysis.spi.AnalysisRequest;
@@ -68,7 +74,8 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
             AtlasId.of("analyzer:jvm-source"), "JVM 源码分析器", "JVM 源码、Javadoc、约束与调用事实");
     private static final Set<String> JAVA_LANG_TYPES = Set.of(
             "String", "Object", "Boolean", "Byte", "Short", "Integer", "Long", "Float", "Double",
-            "Character", "Void", "Exception", "RuntimeException", "IllegalArgumentException", "Enum");
+            "Character", "Void", "Class", "Number", "Throwable", "Error", "Exception", "RuntimeException",
+            "IllegalArgumentException", "Enum", "Comparable", "Iterable", "AutoCloseable");
 
     @Override
     public AnalyzerDescriptor descriptor() {
@@ -78,7 +85,7 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
     @Override
     public AnalyzerContribution analyze(AnalysisRequest request) {
         Objects.requireNonNull(request, "request 不能为空");
-        List<Path> sourceFiles = findProductionJavaSources(request.projectRoot());
+        List<Path> sourceFiles = JavaSourceAnalysis.findProductionJavaSources(request);
         if (sourceFiles.isEmpty()) {
             return new AnalyzerContribution(
                     new CoverageReport(DESCRIPTOR.id().value(), CapabilityStatus.NOT_APPLICABLE, request.scopeUri(),
@@ -126,32 +133,6 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
                 diagnostics);
     }
 
-    private static List<Path> findProductionJavaSources(Path projectRoot) {
-        if (!Files.isDirectory(projectRoot)) {
-            throw new IllegalArgumentException("projectRoot 不是可读取目录: " + projectRoot);
-        }
-        try (Stream<Path> paths = Files.walk(projectRoot)) {
-            return paths.filter(Files::isRegularFile)
-                    .filter(path -> path.getFileName().toString().endsWith(".java"))
-                    .filter(path -> isProductionSource(projectRoot.relativize(path)))
-                    .sorted()
-                    .toList();
-        } catch (IOException exception) {
-            throw new IllegalStateException("无法扫描项目 Java 源码: " + projectRoot, exception);
-        }
-    }
-
-    private static boolean isProductionSource(Path relativePath) {
-        for (Path part : relativePath) {
-            String value = part.toString();
-            if (value.equals("target") || value.equals(".git") || value.equals(".idea") || value.equals("node_modules")
-                    || value.equals("test")) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     private static AtlasDiagnostic compilerDiagnostic(AnalysisRequest request, Diagnostic<? extends JavaFileObject> diagnostic) {
         String identity = diagnostic.getKind() + ":" + diagnostic.getSource() + ":" + diagnostic.getLineNumber() + ":" + diagnostic.getCode();
         DiagnosticSeverity severity = diagnostic.getKind() == Diagnostic.Kind.ERROR ? DiagnosticSeverity.ERROR : DiagnosticSeverity.WARNING;
@@ -186,6 +167,7 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
         private final Map<String, String> explicitImports;
         private final List<String> typeStack = new ArrayList<>();
         private String currentMethodSubject;
+        private String currentMethodReturnType;
 
         private SourceScanner(AnalysisRequest request, CompilationUnitTree unit, Trees trees) {
             this.request = request;
@@ -201,8 +183,17 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
             String simpleName = node.getSimpleName().toString();
             typeStack.add(simpleName);
             String qualifiedName = qualifiedTypeName();
-            facts.add(fact(FactKind.SOURCE_TYPE, qualifiedName,
-                    Map.of("declarationKind", AtlasValue.text(node.getKind().name())), node));
+            Map<String, AtlasValue> attributes = new LinkedHashMap<>();
+            attributes.put("declarationKind", AtlasValue.text(node.getKind().name()));
+            if (node.getExtendsClause() != null) {
+                attributes.put("extendsType", AtlasValue.text(normalizeType(node.getExtendsClause())));
+            }
+            List<AtlasValue> implementedTypes = node.getImplementsClause().stream()
+                    .map(this::normalizeType).map(AtlasValue::text).map(AtlasValue.class::cast).toList();
+            if (!implementedTypes.isEmpty()) {
+                attributes.put("implementsTypes", AtlasValue.values(implementedTypes));
+            }
+            facts.add(fact(FactKind.SOURCE_TYPE, qualifiedName, Map.copyOf(attributes), node));
             try {
                 return super.visitClass(node, facts);
             } finally {
@@ -213,6 +204,7 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
         @Override
         public Void visitMethod(MethodTree node, List<SourceFact> facts) {
             String previousMethod = currentMethodSubject;
+            String previousReturnType = currentMethodReturnType;
             String owner = qualifiedTypeName();
             String methodName = node.getName().contentEquals("<init>") ? "<init>" : node.getName().toString();
             String descriptor = methodName + "(" + node.getParameters().stream()
@@ -221,12 +213,34 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
                     .reduce((left, right) -> left + "," + right)
                     .orElse("") + ")";
             currentMethodSubject = owner + "#" + descriptor;
+            currentMethodReturnType = node.getReturnType() == null ? owner : normalizeType(node.getReturnType());
             facts.add(fact(FactKind.SOURCE_METHOD, currentMethodSubject,
-                    Map.of("owner", AtlasValue.text(owner), "memberDescriptor", AtlasValue.text(descriptor)), node));
+                    Map.of(
+                            "owner", AtlasValue.text(owner),
+                            "memberDescriptor", AtlasValue.text(descriptor),
+                            "returnType", AtlasValue.text(currentMethodReturnType),
+                            "operationKind", AtlasValue.text(node.getReturnType() == null ? "CONSTRUCTOR" : "METHOD")), node));
+            for (int index = 0; index < node.getParameters().size(); index++) {
+                VariableTree parameter = node.getParameters().get(index);
+                String parameterSubject = currentMethodSubject + "::parameter[" + index + "]:" + parameter.getName();
+                facts.add(fact(FactKind.SOURCE_PARAMETER, parameterSubject,
+                        Map.of(
+                                "owner", AtlasValue.text(currentMethodSubject),
+                                "parameterIndex", AtlasValue.decimal(java.math.BigDecimal.valueOf(index)),
+                                "parameterName", AtlasValue.text(parameter.getName().toString()),
+                                "javaType", AtlasValue.text(normalizeType(parameter.getType())),
+                                "implicit", AtlasValue.bool(false)), parameter));
+            }
+            facts.add(fact(FactKind.SOURCE_RETURN, currentMethodSubject + "::return",
+                    Map.of(
+                            "owner", AtlasValue.text(currentMethodSubject),
+                            "javaType", AtlasValue.text(currentMethodReturnType),
+                            "constructorResult", AtlasValue.bool(node.getReturnType() == null)), node));
             try {
                 return super.visitMethod(node, facts);
             } finally {
                 currentMethodSubject = previousMethod;
+                currentMethodReturnType = previousReturnType;
             }
         }
 
@@ -236,6 +250,16 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
                 String subject = qualifiedTypeName() + "#" + node.getName();
                 facts.add(fact(FactKind.SOURCE_FIELD, subject,
                         Map.of("owner", AtlasValue.text(qualifiedTypeName()), "type", AtlasValue.text(normalizeType(node.getType()))), node));
+            } else if (currentMethodSubject != null && node.getInitializer() != null) {
+                // 方法形参没有 initializer；这里仅保留具有显式静态类型和初始化表达式的局部变量，供值流在
+                // requestCommand.withServerContext(...) 等场景中保持具体命令类型。
+                String subject = currentMethodSubject + "::local:" + node.getName();
+                facts.add(fact(FactKind.SOURCE_LOCAL_VARIABLE, subject,
+                        Map.of(
+                                "owner", AtlasValue.text(currentMethodSubject),
+                                "variableName", AtlasValue.text(node.getName().toString()),
+                                "javaType", AtlasValue.text(normalizeType(node.getType())),
+                                "initializer", AtlasValue.text(node.getInitializer().toString())), node));
             }
             return super.visitVariable(node, facts);
         }
@@ -251,7 +275,9 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
 
         @Override
         public Void visitMethodInvocation(MethodInvocationTree node, List<SourceFact> facts) {
-            Invocation invocation = invocationOf(node.getMethodSelect());
+            // 对没有显式接收者的调用（例如 send(command)）保留当前声明类型。若只保留方法名，
+            // 下游在不同 Controller/Service 中遇到同名辅助方法时无法可靠地还原参数流。
+            Invocation invocation = invocationOf(node.getMethodSelect(), qualifiedTypeName());
             if (currentMethodSubject != null) {
                 facts.add(fact(FactKind.METHOD_CALL, currentMethodSubject + " -> " + node.getMethodSelect(),
                         Map.of(
@@ -260,16 +286,89 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
                                 "calleeMethodName", AtlasValue.text(invocation.methodName()),
                                 "calleeExpression", AtlasValue.text(node.getMethodSelect().toString())),
                         node));
+                for (int index = 0; index < node.getArguments().size(); index++) {
+                    var argument = node.getArguments().get(index);
+                    Invocation argumentInvocation = argument instanceof MethodInvocationTree nestedInvocation
+                            ? invocationOf(nestedInvocation.getMethodSelect(), qualifiedTypeName()) : Invocation.none();
+                    facts.add(fact(FactKind.METHOD_ARGUMENT_FLOW,
+                            currentMethodSubject + " -> " + node.getMethodSelect() + "::argument[" + index + "]",
+                            Map.of(
+                                    "caller", AtlasValue.text(currentMethodSubject),
+                                    "calleeOwnerHint", AtlasValue.text(invocation.ownerHint()),
+                                    "calleeExpression", AtlasValue.text(node.getMethodSelect().toString()),
+                                    "calleeMethodName", AtlasValue.text(invocation.methodName()),
+                                    "argumentIndex", AtlasValue.decimal(java.math.BigDecimal.valueOf(index)),
+                                    "argumentExpression", AtlasValue.text(argument.toString()),
+                                    // 构造表达式不是某个已有形参，但它的实例类型在 AST 中是精确可见的。把这个
+                                    // 证据随参数流保留，供后续跨 helper 的 Command / 值流解释使用。
+                                    "argumentStaticType", AtlasValue.text(argument instanceof NewClassTree constructed
+                                            ? normalizeType(constructed.getIdentifier()) : ""),
+                                    "argumentReceiverExpression", AtlasValue.text(argumentInvocation.ownerHint()),
+                                    "argumentInvocationMethodName", AtlasValue.text(argumentInvocation.methodName()),
+                                    "argumentInvocationArgumentCount", AtlasValue.decimal(java.math.BigDecimal.valueOf(
+                                            argument instanceof MethodInvocationTree nestedInvocation
+                                                    ? nestedInvocation.getArguments().size() : -1))), argument));
+                }
             }
             validationFact(node, invocation, facts);
             return super.visitMethodInvocation(node, facts);
+        }
+
+        @Override
+        public Void visitReturn(ReturnTree node, List<SourceFact> facts) {
+            if (currentMethodSubject != null && node.getExpression() != null) {
+                facts.add(fact(FactKind.METHOD_RETURN_FLOW, currentMethodSubject + "::return <- " + node.getExpression(),
+                        Map.of(
+                                "owner", AtlasValue.text(currentMethodSubject),
+                                "returnType", AtlasValue.text(currentMethodReturnType == null ? "<inferred>" : currentMethodReturnType),
+                                "expression", AtlasValue.text(node.getExpression().toString())), node));
+            }
+            return super.visitReturn(node, facts);
+        }
+
+        @Override
+        public Void visitIf(IfTree node, List<SourceFact> facts) {
+            // 显式的 “条件不满足即抛出” 是业务/安全约束的常见 Java 形态，并不一定调用
+            // requireNonNull 等已知 helper。只在分支实际包含 throw 时把它归为强制 guard，避免把普通
+            // 控制流误写成领域规则。
+            if (currentMethodSubject != null && containsThrow(node.getThenStatement())) {
+                String expression = node.getCondition().toString();
+                facts.add(fact(FactKind.VALIDATION_RULE, currentMethodSubject + " :: IF_THROW_GUARD :: " + expression,
+                        Map.of(
+                                "owner", AtlasValue.text(currentMethodSubject),
+                                "ruleType", AtlasValue.text("IF_THROW_GUARD"),
+                                "expression", AtlasValue.text(expression),
+                                "enforcingCall", AtlasValue.text("if (...) throw"),
+                                "guardMethod", AtlasValue.text("if"),
+                                "argumentCount", AtlasValue.decimal(java.math.BigDecimal.ZERO)), node));
+            }
+            return super.visitIf(node, facts);
+        }
+
+        @Override
+        public Void visitAssignment(AssignmentTree node, List<SourceFact> facts) {
+            if (currentMethodSubject != null && node.getExpression() instanceof MethodInvocationTree invocation) {
+                Invocation called = invocationOf(invocation.getMethodSelect(), qualifiedTypeName());
+                if (isNormalizationMethod(called.methodName())) {
+                    facts.add(fact(FactKind.VALUE_NORMALIZATION,
+                            currentMethodSubject + "::" + node.getVariable() + " <- " + invocation,
+                            Map.of(
+                                    "owner", AtlasValue.text(currentMethodSubject),
+                                    "targetExpression", AtlasValue.text(node.getVariable().toString()),
+                                    "transformation", AtlasValue.text(called.methodName()),
+                                    "sourceExpression", AtlasValue.text(invocation.toString())), node));
+                }
+            }
+            return super.visitAssignment(node, facts);
         }
 
         private void validationFact(MethodInvocationTree node, Invocation invocation, List<SourceFact> facts) {
             String methodName = invocation.methodName();
             boolean isPatternCompile = methodName.equals("compile") && invocation.ownerHint().endsWith("Pattern");
             boolean isValidationGuard = methodName.equals("matches") || methodName.equals("requireTrue")
-                    || methodName.equals("requireNonBlank") || methodName.equals("requireNonNull");
+                    || methodName.equals("requireFalse") || methodName.equals("requireCondition")
+                    || methodName.equals("requireNonBlank") || methodName.equals("requireNonNull")
+                    || methodName.equals("requireMatches") || methodName.equals("requirePrefix");
             if (!isPatternCompile && !isValidationGuard) {
                 return;
             }
@@ -281,8 +380,33 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
                             "owner", AtlasValue.text(owner),
                             "ruleType", AtlasValue.text(ruleType),
                             "expression", AtlasValue.text(expression),
-                            "enforcingCall", AtlasValue.text(node.getMethodSelect().toString())),
+                            "enforcingCall", AtlasValue.text(node.getMethodSelect().toString()),
+                            "guardMethod", AtlasValue.text(methodName),
+                            "failureMessage", AtlasValue.text(node.getArguments().size() < 2 ? ""
+                                    : node.getArguments().getLast().toString()),
+                            "argumentCount", AtlasValue.decimal(java.math.BigDecimal.valueOf(node.getArguments().size()))),
                     node));
+        }
+
+        private static boolean isNormalizationMethod(String methodName) {
+            return methodName.equals("trim") || methodName.equals("strip") || methodName.equals("stripLeading")
+                    || methodName.equals("stripTrailing") || methodName.equals("toLowerCase") || methodName.equals("toUpperCase")
+                    || methodName.equals("trimToNull") || methodName.equals("trimToEmpty");
+        }
+
+        private static boolean containsThrow(Tree statement) {
+            if (statement == null) {
+                return false;
+            }
+            final boolean[] found = {false};
+            new TreeScanner<Void, Void>() {
+                @Override
+                public Void visitThrow(ThrowTree node, Void unused) {
+                    found[0] = true;
+                    return null;
+                }
+            }.scan(statement, null);
+            return found[0];
         }
 
         private SourceFact fact(FactKind kind, String subject, Map<String, AtlasValue> attributes, Tree node) {
@@ -314,6 +438,9 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
         }
 
         private String normalizeType(Tree type) {
+            if (type == null) {
+                return "<inferred>";
+            }
             String raw = type.toString().replace("...", "[]").trim();
             int genericStart = raw.indexOf('<');
             String suffix = "";
@@ -373,17 +500,22 @@ public final class JvmSourceFactsAnalyzer implements SourceFactsAnalyzer {
             return Map.copyOf(imports);
         }
 
-        private static Invocation invocationOf(ExpressionTree methodSelect) {
+        private static Invocation invocationOf(ExpressionTree methodSelect, String enclosingType) {
             if (methodSelect instanceof MemberSelectTree memberSelect) {
-                return new Invocation(memberSelect.getExpression().toString(), memberSelect.getIdentifier().toString());
+                String receiver = memberSelect.getExpression().toString();
+                return new Invocation("this".equals(receiver) ? enclosingType : receiver,
+                        memberSelect.getIdentifier().toString());
             }
             if (methodSelect instanceof IdentifierTree identifier) {
-                return new Invocation("", identifier.getName().toString());
+                return new Invocation(enclosingType, identifier.getName().toString());
             }
             return new Invocation("", methodSelect.toString());
         }
     }
 
     private record Invocation(String ownerHint, String methodName) {
+        private static Invocation none() {
+            return new Invocation("", "");
+        }
     }
 }

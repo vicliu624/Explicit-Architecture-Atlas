@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.ApplicationUseCase;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ApplicationContextScope;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.ArchitectureAsset;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.AssetKind;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.AssetMetadata;
@@ -17,15 +18,26 @@ import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasRelation;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasValue;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.Audience;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.BoundaryKind;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.BeanDefinitionOverridePolicy;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.BusinessConcept;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.CapabilityStatus;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ClasspathCapabilityCompleteness;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.CodeElement;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.CodeElementKind;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ComponentDefinition;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ComponentKind;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ComponentScope;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ConditionExpression;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ConditionStatus;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ConditionTerm;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.ContentBundle;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.ContentEntry;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.CoverageReport;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ConfigurationProperty;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ConfigurationScenario;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.DataTarget;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.DataTargetKind;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.DataSensitivity;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.DiagnosticSeverity;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.DomainConstraint;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.DomainConstraintKind;
@@ -46,6 +58,16 @@ import io.github.vicliu624.explicitarchitecture.atlas.domain.FactRelation;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.IntentBundle;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.IntentDeclaration;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.IntentTarget;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.InjectionCardinality;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.InjectionKind;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.InjectionPoint;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.OperationContract;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.OperationFailure;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.OperationInput;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.OperationInputRole;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.OperationKind;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.OperationOutcome;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.OperationOutcomeKind;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.ProcessManager;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.Projection;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.RelationKind;
@@ -54,6 +76,12 @@ import io.github.vicliu624.explicitarchitecture.atlas.domain.RuntimeOverlay;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.SourceFact;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.SourceLocator;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.SourceRange;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ScenarioProperty;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.SemanticValue;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.SemanticValueCategory;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.TrustLevel;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ValueCardinality;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ValueNullability;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -153,9 +181,118 @@ final class AtlasPackageJsonCodec {
                 node.put("boundaryKind", boundary.boundaryKind().name());
                 node.put("responsibility", boundary.responsibility());
             }
+            case SemanticValue value -> {
+                node.put("semanticCategory", value.category().name());
+                node.put("javaRepresentation", value.javaRepresentation());
+                node.put("cardinality", value.cardinality().name());
+                node.put("nullability", value.nullability().name());
+                node.put("trustLevel", value.trustLevel().name());
+                node.put("sensitivity", value.sensitivity().name());
+                node.put("lifecycleState", value.lifecycleState());
+            }
+            case OperationContract operation -> {
+                node.put("operationKind", operation.operationKind().name());
+                node.put("javaSignature", operation.javaSignature());
+                node.set("locator", locatorNode(operation.locator()));
+                node.set("inputs", array(operation.inputs(), this::operationInputNode));
+                node.set("outcomes", array(operation.outcomes(), this::operationOutcomeNode));
+                node.set("failures", array(operation.failures(), this::operationFailureNode));
+            }
+            case ComponentDefinition component -> {
+                node.put("componentKind", component.componentKind().name());
+                node.put("beanName", component.beanName());
+                node.put("declaredType", component.declaredType());
+                node.put("candidateType", component.candidateType());
+                node.put("scope", component.scope().name());
+                node.put("primary", component.primary());
+                node.set("qualifiers", stringArray(component.qualifiers()));
+                node.set("activationCondition", conditionNode(component.activationCondition()));
+            }
+            case InjectionPoint injection -> {
+                node.put("ownerComponentId", injection.ownerComponentId().value());
+                node.put("requestedType", injection.requestedType());
+                node.put("injectionKind", injection.injectionKind().name());
+                node.put("injectionCardinality", injection.cardinality().name());
+                node.put("required", injection.required());
+                node.set("qualifiers", stringArray(injection.qualifiers()));
+            }
+            case ConfigurationProperty property -> {
+                node.put("propertyKey", property.propertyKey());
+                node.put("declaredDefault", property.declaredDefault());
+                node.put("sensitivity", property.sensitivity().name());
+            }
+            case ConfigurationScenario scenario -> {
+                node.set("activeProfiles", stringArray(scenario.activeProfiles()));
+                ObjectNode properties = node.putObject("properties");
+                scenario.properties().forEach((key, value) -> {
+                    ObjectNode property = properties.putObject(key);
+                    property.put("provenance", value.provenance());
+                    property.put("value", value.value());
+                    property.put("redacted", value.redacted());
+                });
+                node.set("classpathCapabilities", stringArray(scenario.classpathCapabilities()));
+                node.put("classpathCompleteness", scenario.classpathCapabilityCompleteness().name());
+                ObjectNode context = node.putObject("applicationContext");
+                context.put("id", scenario.applicationContext().contextId());
+                context.set("entryPointTypes", stringArray(scenario.applicationContext().entryPointTypes()));
+                context.set("rootModuleCoordinates", stringArray(scenario.applicationContext().rootModuleCoordinates()));
+                context.set("sourcePathPrefixes", stringArray(scenario.applicationContext().sourcePathPrefixes()));
+                context.set("componentScanPackages", stringArray(scenario.applicationContext().componentScanPackages()));
+                context.put("beanDefinitionOverridePolicy", scenario.applicationContext().beanDefinitionOverridePolicy().name());
+                ObjectNode overrides = context.putObject("explicitBeanOverrides");
+                scenario.applicationContext().explicitBeanOverrides().forEach(overrides::put);
+            }
             default -> throw new IllegalArgumentException("未知 Atlas 节点实现类型: " + asset.getClass().getName());
         }
         return node;
+    }
+
+    private ObjectNode operationInputNode(OperationInput input) {
+        ObjectNode node = mapper.createObjectNode();
+        node.put("name", input.name());
+        node.put("javaType", input.javaType());
+        node.put("role", input.role().name());
+        node.put("implicit", input.implicit());
+        node.put("nullability", input.nullability().name());
+        node.put("description", input.description());
+        return node;
+    }
+
+    private ObjectNode operationOutcomeNode(OperationOutcome outcome) {
+        ObjectNode node = mapper.createObjectNode();
+        node.put("kind", outcome.kind().name());
+        node.put("name", outcome.name());
+        node.put("javaType", outcome.javaType());
+        node.put("condition", outcome.condition());
+        node.put("description", outcome.description());
+        return node;
+    }
+
+    private ObjectNode operationFailureNode(OperationFailure failure) {
+        ObjectNode node = mapper.createObjectNode();
+        node.put("exceptionType", failure.exceptionType());
+        node.put("condition", failure.condition());
+        node.put("description", failure.description());
+        return node;
+    }
+
+    private ObjectNode conditionNode(ConditionExpression condition) {
+        ObjectNode node = mapper.createObjectNode();
+        node.put("canonicalForm", condition.canonicalForm());
+        node.put("status", condition.status().name());
+        node.set("terms", array(condition.terms(), term -> {
+            ObjectNode item = mapper.createObjectNode();
+            item.put("kind", term.kind());
+            item.put("subject", term.subject());
+            item.put("operator", term.operator());
+            item.put("expectedValue", term.expectedValue());
+            return item;
+        }));
+        return node;
+    }
+
+    private ArrayNode stringArray(List<String> values) {
+        return array(values, mapper.getNodeFactory()::textNode);
     }
 
     private ObjectNode metadataNode(AssetMetadata metadata) {
@@ -343,7 +480,97 @@ final class AtlasPackageJsonCodec {
             case CODE_ELEMENT -> new CodeElement(metadata, CodeElementKind.valueOf(text(node, "elementKind")), text(node, "qualifiedName"), readLocator(node.path("locator")));
             case DATA_TARGET -> new DataTarget(metadata, DataTargetKind.valueOf(text(node, "targetKind")));
             case EXTERNAL_BOUNDARY -> new ExternalBoundary(metadata, BoundaryKind.valueOf(text(node, "boundaryKind")), text(node, "responsibility"));
+            case SEMANTIC_VALUE -> new SemanticValue(metadata,
+                    SemanticValueCategory.valueOf(text(node, "semanticCategory")), text(node, "javaRepresentation"),
+                    ValueCardinality.valueOf(text(node, "cardinality")), ValueNullability.valueOf(text(node, "nullability")),
+                    TrustLevel.valueOf(text(node, "trustLevel")), DataSensitivity.valueOf(text(node, "sensitivity")), text(node, "lifecycleState"));
+            case OPERATION_CONTRACT -> new OperationContract(metadata, OperationKind.valueOf(text(node, "operationKind")),
+                    text(node, "javaSignature"), readLocator(node.path("locator")),
+                    list(node.path("inputs"), input -> new OperationInput(text(input, "name"), text(input, "javaType"),
+                            OperationInputRole.valueOf(text(input, "role")), input.path("implicit").asBoolean(false),
+                            ValueNullability.valueOf(text(input, "nullability")), textOrEmpty(input, "description"))),
+                    list(node.path("outcomes"), outcome -> new OperationOutcome(OperationOutcomeKind.valueOf(text(outcome, "kind")),
+                            text(outcome, "name"), text(outcome, "javaType"), textOrEmpty(outcome, "condition"),
+                            textOrEmpty(outcome, "description"))),
+                    list(node.path("failures"), failure -> new OperationFailure(text(failure, "exceptionType"),
+                            textOrEmpty(failure, "condition"), textOrEmpty(failure, "description"))));
+            case COMPONENT_DEFINITION -> new ComponentDefinition(metadata, ComponentKind.valueOf(text(node, "componentKind")),
+                    text(node, "beanName"), text(node, "declaredType"), text(node, "candidateType"),
+                    ComponentScope.valueOf(text(node, "scope")), node.path("primary").asBoolean(false),
+                    stringList(node.path("qualifiers")), readCondition(node.path("activationCondition")));
+            case INJECTION_POINT -> new InjectionPoint(metadata, id(node, "ownerComponentId"), text(node, "requestedType"),
+                    InjectionKind.valueOf(text(node, "injectionKind")), InjectionCardinality.valueOf(text(node, "injectionCardinality")),
+                    node.path("required").asBoolean(false), stringList(node.path("qualifiers")));
+            case CONFIGURATION_PROPERTY -> new ConfigurationProperty(metadata, text(node, "propertyKey"), textOrEmpty(node, "declaredDefault"),
+                    DataSensitivity.valueOf(text(node, "sensitivity")));
+            case CONFIGURATION_SCENARIO -> new ConfigurationScenario(metadata, stringList(node.path("activeProfiles")),
+                    scenarioProperties(node.path("properties")), stringList(node.path("classpathCapabilities")),
+                    classpathCompleteness(node.path("classpathCompleteness")),
+                    applicationContext(node.path("applicationContext")));
         };
+    }
+
+    private ClasspathCapabilityCompleteness classpathCompleteness(JsonNode node) {
+        return node.isMissingNode() || node.isNull()
+                ? ClasspathCapabilityCompleteness.PARTIAL
+                : ClasspathCapabilityCompleteness.valueOf(textNode(node, "classpathCompleteness"));
+    }
+
+    private static String textNode(JsonNode node, String label) {
+        if (!node.isTextual() || node.asText().isBlank()) {
+            throw new IllegalArgumentException("缺少非空文本字段: " + label);
+        }
+        return node.asText().trim();
+    }
+
+    private ApplicationContextScope applicationContext(JsonNode node) {
+        if (node.isMissingNode() || node.isNull()) {
+            return ApplicationContextScope.global();
+        }
+        Map<String, String> overrides = new LinkedHashMap<>();
+        JsonNode overrideNode = node.path("explicitBeanOverrides");
+        if (overrideNode.isObject()) {
+            overrideNode.fields().forEachRemaining(entry -> {
+                if (!entry.getValue().isTextual() || entry.getValue().asText().isBlank()) {
+                    throw new IllegalArgumentException("场景 explicitBeanOverride 必须为非空文本: " + entry.getKey());
+                }
+                overrides.put(entry.getKey(), entry.getValue().asText().trim());
+            });
+        }
+        return new ApplicationContextScope(
+                text(node, "id"),
+                stringList(node.path("entryPointTypes")),
+                stringList(node.path("rootModuleCoordinates")),
+                stringList(node.path("sourcePathPrefixes")),
+                stringList(node.path("componentScanPackages")),
+                BeanDefinitionOverridePolicy.valueOf(text(node, "beanDefinitionOverridePolicy")),
+                overrides);
+    }
+
+    private ConditionExpression readCondition(JsonNode node) {
+        return new ConditionExpression(text(node, "canonicalForm"), ConditionStatus.valueOf(text(node, "status")),
+                list(node.path("terms"), term -> new ConditionTerm(text(term, "kind"), text(term, "subject"),
+                        text(term, "operator"), textOrEmpty(term, "expectedValue"))));
+    }
+
+    private Map<String, ScenarioProperty> scenarioProperties(JsonNode node) {
+        if (!node.isObject()) {
+            throw new IllegalArgumentException("场景 properties 必须是对象");
+        }
+        Map<String, ScenarioProperty> values = new LinkedHashMap<>();
+        node.fields().forEachRemaining(entry -> values.put(entry.getKey(), new ScenarioProperty(
+                text(entry.getValue(), "provenance"), textOrEmpty(entry.getValue(), "value"),
+                entry.getValue().path("redacted").asBoolean(false))));
+        return Map.copyOf(values);
+    }
+
+    private static List<String> stringList(JsonNode node) {
+        return list(node, value -> {
+            if (!value.isTextual()) {
+                throw new IllegalArgumentException("预期文本数组元素");
+            }
+            return value.asText();
+        });
     }
 
     private AssetMetadata readMetadata(JsonNode node) {

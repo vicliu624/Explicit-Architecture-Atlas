@@ -7,6 +7,8 @@ import io.github.vicliu624.explicitarchitecture.atlas.analysis.spi.AnalysisReque
 import io.github.vicliu624.explicitarchitecture.atlas.analysis.spi.AnalyzerContribution;
 import io.github.vicliu624.explicitarchitecture.atlas.analysis.spi.SourceFactsAnalyzer;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasDiagnostic;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ArchitectureAsset;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasGraph;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasId;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasPackage;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasPackageManifest;
@@ -26,7 +28,9 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -52,7 +56,8 @@ public final class DefaultAtlasBuildService implements AtlasBuildUseCase {
     public AtlasPackage build(AtlasBuildRequest request) {
         Objects.requireNonNull(request, "request 不能为空");
         AnalysisRequest analysisRequest = new AnalysisRequest(
-                request.projectId(), request.projectRoot(), request.sourceRevision(), request.conventionProfile());
+                request.projectId(), request.projectRoot(), request.sourceRevision(), request.conventionProfile(),
+                request.sourceRoots(), request.excludedPaths());
         List<AnalyzerContribution> contributions = new ArrayList<>();
         List<AtlasDiagnostic> diagnostics = new ArrayList<>();
         for (SourceFactsAnalyzer analyzer : analyzers) {
@@ -65,6 +70,7 @@ public final class DefaultAtlasBuildService implements AtlasBuildUseCase {
         contributions.forEach(contribution -> diagnostics.addAll(contribution.diagnostics()));
         DesignAtlasResolution resolution = resolver.resolve(facts, request.intents(), request.content());
         diagnostics.addAll(resolution.diagnostics());
+        List<AtlasDiagnostic> uniqueDiagnostics = uniqueDiagnostics(diagnostics);
 
         AtlasPackage atlasPackage = new AtlasPackage(
                 new AtlasPackageManifest(
@@ -75,14 +81,26 @@ public final class DefaultAtlasBuildService implements AtlasBuildUseCase {
                         Instant.now(),
                         contributions.stream().map(AnalyzerContribution::coverage)
                                 .sorted(Comparator.comparing(CoverageReport::analyzerId)).toList()),
-                resolution.designAtlas(),
+                withScenarios(resolution.designAtlas(), request.scenarios()),
                 facts,
                 request.intents(),
                 request.content(),
                 Optional.empty(),
-                diagnostics);
+                uniqueDiagnostics);
         packageRepository.save(atlasPackage);
         return atlasPackage;
+    }
+
+    /**
+     * 多个源码事实或归一化步骤可能以同一稳定身份报告同一个诊断。Package 的身份约束要求调用方先合并；
+     * 保留首次出现的实例以维持分析器顺序的可复现性，而不是让重复警告阻断整包构建。
+     */
+    private static List<AtlasDiagnostic> uniqueDiagnostics(List<AtlasDiagnostic> diagnostics) {
+        Map<AtlasId, AtlasDiagnostic> byId = new LinkedHashMap<>();
+        for (AtlasDiagnostic diagnostic : diagnostics) {
+            byId.putIfAbsent(Objects.requireNonNull(diagnostic, "诊断不能为空").id(), diagnostic);
+        }
+        return byId.values().stream().sorted(Comparator.comparing(AtlasDiagnostic::id)).toList();
     }
 
     private static AnalyzerContribution runAnalyzer(
@@ -124,6 +142,15 @@ public final class DefaultAtlasBuildService implements AtlasBuildUseCase {
                 "ANALYZER_FAILED",
                 "分析器 " + analyzerId + " 执行失败: " + exception.getMessage(),
                 Optional.of(evidence.locator()));
+    }
+
+    private static AtlasGraph withScenarios(AtlasGraph designAtlas, List<io.github.vicliu624.explicitarchitecture.atlas.domain.ConfigurationScenario> scenarios) {
+        if (scenarios.isEmpty()) {
+            return designAtlas;
+        }
+        List<ArchitectureAsset> nodes = new ArrayList<>(designAtlas.nodes());
+        nodes.addAll(scenarios);
+        return new AtlasGraph(nodes, designAtlas.relations());
     }
 
     private static void assertUniqueAnalyzerIds(List<SourceFactsAnalyzer> analyzers) {

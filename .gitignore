@@ -8,6 +8,7 @@ ui-layer/atlas-web/dist/
 
 # 本机私有 Workspace：可能包含受限源码、运行观测和业务内容，禁止提交
 workspace/local/
+.tmp/
 
 # IDE 与操作系统文件
 .idea/

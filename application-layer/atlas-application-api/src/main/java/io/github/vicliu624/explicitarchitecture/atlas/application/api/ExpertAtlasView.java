@@ -53,13 +53,46 @@ public record ExpertAtlasView(
             List<String> httpMethods,
             List<String> paths,
             List<CallPath> callPaths,
+            ExecutionGraph executionGraph,
             List<AtlasRelationView> directEffects) {
         public EndpointTrace {
             Objects.requireNonNull(endpoint, "endpoint 不能为空");
             httpMethods = immutable(httpMethods, "httpMethods");
             paths = immutable(paths, "paths");
             callPaths = immutable(callPaths, "callPaths");
+            Objects.requireNonNull(executionGraph, "executionGraph 不能为空");
             directEffects = immutable(directEffects, "directEffects");
+        }
+    }
+
+    /**
+     * 一个入口可达的执行关系图，不把分支和循环强行压成有限数量的简单路径。
+     *
+     * <p>{@link CallPath} 只是界面的快速预览，可能因可读性而截断；该图则包含从入口出发经同步调用、命令派发、
+     * Handler、事件消费、流程协调、投影和数据目标等所有已证明的可达节点和边。{@code traversalDirection} 说明
+     * 为了表达“命令 → Handler”而反向使用了一条语义上仍为 {@code HANDLES} 的原始关系。</p>
+     */
+    public record ExecutionGraph(List<TraceNode> nodes, List<TraceRelation> relations) {
+        public ExecutionGraph {
+            nodes = immutable(nodes, "nodes");
+            relations = immutable(relations, "relations");
+        }
+    }
+
+    /** 执行图节点；代码节点携带完整限定符和受控项目源码定位。 */
+    public record TraceNode(AtlasAssetReference asset, String qualifiedName, AtlasLocationView location) {
+        public TraceNode {
+            Objects.requireNonNull(asset, "asset 不能为空");
+            qualifiedName = qualifiedName == null ? "" : qualifiedName.trim();
+            Objects.requireNonNull(location, "location 不能为空");
+        }
+    }
+
+    /** 执行图边及其完整证据；方向只影响遍历/渲染，不修改底层事实关系。 */
+    public record TraceRelation(AtlasRelationView relation, String traversalDirection) {
+        public TraceRelation {
+            Objects.requireNonNull(relation, "relation 不能为空");
+            traversalDirection = required(traversalDirection, "traversalDirection");
         }
     }
 
@@ -136,7 +169,7 @@ public record ExpertAtlasView(
         }
     }
 
-    /** 资产是否可以从 Workspace 声明的 source JAR 安全解析。 */
+    /** 资产是否可以从 Workspace 声明的项目源根或 source JAR 安全解析。 */
     public record SourceReference(boolean available, String qualifiedName, AtlasLocationView location) {
         public SourceReference {
             qualifiedName = qualifiedName == null ? "" : qualifiedName.trim();
@@ -144,7 +177,7 @@ public record ExpertAtlasView(
         }
     }
 
-    /** source JAR 命中的源码文本；不会返回归档的本机绝对路径。 */
+    /** 项目源根或 source JAR 命中的源码文本；不会返回本机绝对路径。 */
     public record SourceFile(
             String assetId,
             String qualifiedName,

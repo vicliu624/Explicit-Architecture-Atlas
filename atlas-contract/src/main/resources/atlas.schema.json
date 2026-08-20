@@ -74,7 +74,13 @@
         { "$ref": "#/$defs/endpointOperation" },
         { "$ref": "#/$defs/codeElement" },
         { "$ref": "#/$defs/dataTarget" },
-        { "$ref": "#/$defs/externalBoundary" }
+        { "$ref": "#/$defs/externalBoundary" },
+        { "$ref": "#/$defs/semanticValue" },
+        { "$ref": "#/$defs/operationContract" },
+        { "$ref": "#/$defs/componentDefinition" },
+        { "$ref": "#/$defs/injectionPoint" },
+        { "$ref": "#/$defs/configurationProperty" },
+        { "$ref": "#/$defs/configurationScenario" }
       ]
     },
     "businessConcept": {
@@ -147,6 +153,84 @@
       ],
       "unevaluatedProperties": false
     },
+    "semanticValue": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "SEMANTIC_VALUE" }, "semanticCategory": { "enum": ["RAW_INPUT", "DOMAIN_PRIMITIVE", "VALUE_OBJECT", "ENTITY_IDENTIFIER", "AGGREGATE_STATE", "COMMAND_PAYLOAD", "EVENT_PAYLOAD", "QUERY_FILTER", "READ_MODEL_VALUE", "PERSISTED_REPRESENTATION", "EXTERNAL_REQUEST", "EXTERNAL_RESPONSE", "CONFIGURATION_VALUE", "SECURITY_CONTEXT", "TENANT_CONTEXT", "TIME_SOURCE", "ERROR_DETAIL", "AUDIT_VALUE", "SECRET", "CUSTOM"] }, "javaRepresentation": { "type": "string", "minLength": 1 }, "cardinality": { "enum": ["SINGLE", "OPTIONAL", "COLLECTION", "MAP", "STREAM", "ASYNC_SINGLE", "ASYNC_STREAM", "UNKNOWN"] }, "nullability": { "enum": ["REQUIRED", "OPTIONAL", "CONDITIONAL", "UNKNOWN"] }, "trustLevel": { "enum": ["EXTERNAL_UNTRUSTED", "INTERNAL", "VERIFIED", "SYSTEM_GENERATED", "UNKNOWN"] }, "sensitivity": { "enum": ["PUBLIC", "INTERNAL", "PII", "SECRET", "UNKNOWN"] }, "lifecycleState": { "type": "string", "minLength": 1 } }, "required": ["semanticCategory", "javaRepresentation", "cardinality", "nullability", "trustLevel", "sensitivity", "lifecycleState"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "operationContract": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "OPERATION_CONTRACT" }, "operationKind": { "enum": ["METHOD", "CONSTRUCTOR", "HTTP_ENDPOINT", "MESSAGE_CONSUMER", "EVENT_HANDLER", "COMMAND_HANDLER", "QUERY_HANDLER", "SCHEDULED_TASK", "LAMBDA", "FRAMEWORK_CALLBACK", "FACTORY_METHOD", "CUSTOM"] }, "javaSignature": { "type": "string", "minLength": 1 }, "locator": { "$ref": "#/$defs/locator" }, "inputs": { "type": "array", "items": { "$ref": "#/$defs/operationInput" } }, "outcomes": { "type": "array", "items": { "$ref": "#/$defs/operationOutcome" } }, "failures": { "type": "array", "items": { "$ref": "#/$defs/operationFailure" } } }, "required": ["operationKind", "javaSignature", "locator", "inputs", "outcomes", "failures"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "operationInput": {
+      "type": "object",
+      "required": ["name", "javaType", "role", "implicit", "nullability", "description"],
+      "properties": { "name": { "type": "string", "minLength": 1 }, "javaType": { "type": "string", "minLength": 1 }, "role": { "enum": ["BUSINESS_INPUT", "RAW_INPUT", "DOMAIN_PRIMITIVE", "COMMAND", "QUERY", "EVENT", "DEPENDENCY", "RECEIVER_STATE", "CONFIGURATION", "SECURITY_CONTEXT", "TENANT_CONTEXT", "TRANSACTION_CONTEXT", "TIME_SOURCE", "EXTERNAL_RESPONSE", "PERSISTENCE_READ", "CUSTOM"] }, "implicit": { "type": "boolean" }, "nullability": { "enum": ["REQUIRED", "OPTIONAL", "CONDITIONAL", "UNKNOWN"] }, "description": { "type": "string" } },
+      "additionalProperties": false
+    },
+    "operationOutcome": {
+      "type": "object",
+      "required": ["kind", "name", "javaType", "condition", "description"],
+      "properties": { "kind": { "enum": ["RETURN_VALUE", "STATE_MUTATION", "EVENT_PUBLICATION", "PERSISTENCE_WRITE", "CACHE_WRITE", "EXTERNAL_CALL", "ASYNC_CONTINUATION", "AUDIT_RECORD", "CUSTOM"] }, "name": { "type": "string", "minLength": 1 }, "javaType": { "type": "string", "minLength": 1 }, "condition": { "type": "string" }, "description": { "type": "string" } },
+      "additionalProperties": false
+    },
+    "operationFailure": {
+      "type": "object",
+      "required": ["exceptionType", "condition", "description"],
+      "properties": { "exceptionType": { "type": "string", "minLength": 1 }, "condition": { "type": "string" }, "description": { "type": "string" } },
+      "additionalProperties": false
+    },
+    "componentDefinition": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "COMPONENT_DEFINITION" }, "componentKind": { "enum": ["COMPONENT", "SERVICE", "REPOSITORY", "CONTROLLER", "CONFIGURATION", "FACTORY_METHOD", "FACTORY_BEAN", "AUTO_CONFIGURATION", "XML_DEFINITION", "PROGRAMMATIC", "TEST_CONFIGURATION", "CUSTOM"] }, "beanName": { "type": "string", "minLength": 1 }, "declaredType": { "type": "string", "minLength": 1 }, "candidateType": { "type": "string", "minLength": 1 }, "scope": { "enum": ["SINGLETON", "PROTOTYPE", "REQUEST", "SESSION", "APPLICATION", "THREAD", "REFRESH", "CUSTOM", "UNKNOWN"] }, "primary": { "type": "boolean" }, "qualifiers": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }, "activationCondition": { "$ref": "#/$defs/conditionExpression" } }, "required": ["componentKind", "beanName", "declaredType", "candidateType", "scope", "primary", "qualifiers", "activationCondition"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "conditionExpression": {
+      "type": "object",
+      "required": ["canonicalForm", "status", "terms"],
+      "properties": { "canonicalForm": { "type": "string", "minLength": 1 }, "status": { "enum": ["POSSIBLE", "ACTIVE", "EXCLUDED", "UNRESOLVED", "OBSERVED"] }, "terms": { "type": "array", "items": { "$ref": "#/$defs/conditionTerm" } } },
+      "additionalProperties": false
+    },
+    "conditionTerm": {
+      "type": "object",
+      "required": ["kind", "subject", "operator", "expectedValue"],
+      "properties": { "kind": { "type": "string", "minLength": 1 }, "subject": { "type": "string", "minLength": 1 }, "operator": { "type": "string", "minLength": 1 }, "expectedValue": { "type": "string" } },
+      "additionalProperties": false
+    },
+    "injectionPoint": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "INJECTION_POINT" }, "ownerComponentId": { "$ref": "#/$defs/id" }, "requestedType": { "type": "string", "minLength": 1 }, "injectionKind": { "enum": ["CONSTRUCTOR", "FIELD", "SETTER", "METHOD_PARAMETER", "LOOKUP_METHOD", "OBJECT_PROVIDER", "OBJECT_FACTORY", "APPLICATION_CONTEXT_LOOKUP", "BEAN_FACTORY_LOOKUP", "PROGRAMMATIC_LOOKUP", "CUSTOM"] }, "injectionCardinality": { "enum": ["SINGLE", "OPTIONAL", "COLLECTION", "MAP", "PROVIDER", "UNKNOWN"] }, "required": { "type": "boolean" }, "qualifiers": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true } }, "required": ["ownerComponentId", "requestedType", "injectionKind", "injectionCardinality", "required", "qualifiers"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "configurationProperty": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "CONFIGURATION_PROPERTY" }, "propertyKey": { "type": "string", "minLength": 1 }, "declaredDefault": { "type": "string" }, "sensitivity": { "enum": ["PUBLIC", "INTERNAL", "PII", "SECRET", "UNKNOWN"] } }, "required": ["propertyKey", "declaredDefault", "sensitivity"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "configurationScenario": {
+      "allOf": [
+        { "$ref": "#/$defs/nodeBase" },
+        { "properties": { "kind": { "const": "CONFIGURATION_SCENARIO" }, "activeProfiles": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }, "properties": { "type": "object", "additionalProperties": { "$ref": "#/$defs/scenarioProperty" } }, "classpathCapabilities": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true } }, "required": ["activeProfiles", "properties", "classpathCapabilities"] }
+      ],
+      "unevaluatedProperties": false
+    },
+    "scenarioProperty": {
+      "type": "object",
+      "required": ["provenance", "value", "redacted"],
+      "properties": { "provenance": { "type": "string", "minLength": 1 }, "value": { "type": "string" }, "redacted": { "type": "boolean" } },
+      "additionalProperties": false
+    },
     "eventField": {
       "type": "object",
       "required": ["name", "role"],
@@ -158,7 +242,7 @@
       "required": ["id", "kind", "sourceId", "targetId", "attributes", "evidence"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
-        "kind": { "enum": ["REPRESENTS", "CONTAINS", "DEPENDS_ON", "EXPOSES_TO", "CONSTRAINS", "CALLS", "HANDLES", "PRODUCES", "CONSUMES", "PUBLISHES", "PROJECTS_TO", "WRITES_TO", "STARTS", "WAITS_FOR", "DISPATCHES", "COMPLETES", "COMPENSATES", "EVIDENCED_BY"] },
+        "kind": { "enum": ["REPRESENTS", "CONTAINS", "DEPENDS_ON", "EXPOSES_TO", "CONSTRAINS", "CALLS", "HANDLES", "PRODUCES", "CONSUMES", "PUBLISHES", "PROJECTS_TO", "WRITES_TO", "STARTS", "WAITS_FOR", "DISPATCHES", "COMPLETES", "COMPENSATES", "EVIDENCED_BY", "ACCEPTS", "RETURNS", "ARGUMENT_BINDS_TO", "RETURN_FLOWS_TO", "DERIVES_FROM", "NORMALIZES", "VALIDATES", "MUTATES_STATE", "READS_FROM", "SERIALIZES_AS", "DESERIALIZES_FROM", "IMPLEMENTS", "OVERRIDES", "DELEGATES_TO", "LOOKS_UP", "DEFINES_BEAN", "REQUESTS_BEAN", "RESOLVES_TO", "ACTIVATES_WHEN", "EXCLUDES_WHEN", "PROXIES", "INTERCEPTS", "BYPASSES_PROXY", "CROSSES_ASYNC_BOUNDARY", "CALLS_EXTERNAL", "BYPASSES_DOMAIN_PRIMITIVE", "CONTRADICTS", "DOCUMENTS"] },
         "sourceId": { "$ref": "#/$defs/id" },
         "targetId": { "$ref": "#/$defs/id" },
         "attributes": { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } },
@@ -190,7 +274,7 @@
       "required": ["id", "origin", "claim", "status", "locator", "sourceRevision", "visibility", "analyzerId"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
-        "origin": { "enum": ["SOURCE_CODE", "MAVEN_MODEL", "ANNOTATION_MANIFEST", "CONTENT_BUNDLE", "RUNTIME_SYSTEM", "SOURCE_ARCHIVE", "PLANNED_DOCUMENT"] },
+        "origin": { "enum": ["SOURCE_CODE", "MAVEN_MODEL", "ANNOTATION_MANIFEST", "WORKSPACE_CONFIGURATION", "CONTENT_BUNDLE", "RUNTIME_SYSTEM", "SOURCE_ARCHIVE", "PLANNED_DOCUMENT"] },
         "claim": { "enum": ["DECLARED", "DERIVED", "OBSERVED", "PLANNED"] },
         "status": { "enum": ["VERIFIED", "PARTIAL", "PENDING", "CONFLICTED"] },
         "locator": { "$ref": "#/$defs/locator" },
@@ -213,7 +297,7 @@
     "fact": {
       "type": "object",
       "required": ["id", "analyzerId", "kind", "subject", "attributes", "evidence"],
-      "properties": { "id": { "$ref": "#/$defs/id" }, "analyzerId": { "type": "string", "minLength": 1 }, "kind": { "enum": ["PROJECT", "MAVEN_MODULE", "MAVEN_DEPENDENCY", "SOURCE_TYPE", "SOURCE_FIELD", "SOURCE_METHOD", "ANNOTATION", "VALIDATION_RULE", "METHOD_CALL", "HTTP_ENDPOINT", "COMMAND_DISPATCH", "COMMAND_HANDLER", "EVENT_PUBLICATION", "EVENT_CONSUMPTION", "EVENT_PAYLOAD_FIELD", "PERSISTENCE_ENTITY", "PERSISTENCE_TABLE", "PERSISTENCE_COLUMN", "REPOSITORY", "PROJECTION_WRITE", "PROCESS_START", "PROCESS_WAIT", "PROCESS_DISPATCH", "PROCESS_COMPLETION", "RUNTIME_MEASUREMENT"] }, "subject": { "type": "string", "minLength": 1 }, "attributes": { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }, "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } } },
+      "properties": { "id": { "$ref": "#/$defs/id" }, "analyzerId": { "type": "string", "minLength": 1 }, "kind": { "enum": ["PROJECT", "MAVEN_MODULE", "MAVEN_DEPENDENCY", "SOURCE_TYPE", "SOURCE_FIELD", "SOURCE_METHOD", "SOURCE_PARAMETER", "SOURCE_RETURN", "ANNOTATION", "VALIDATION_RULE", "GUARD_DEFINITION", "METHOD_CALL", "METHOD_ARGUMENT_FLOW", "METHOD_RETURN_FLOW", "VALUE_NORMALIZATION", "HTTP_ENDPOINT", "COMMAND_DISPATCH", "COMMAND_HANDLER", "EVENT_PUBLICATION", "EVENT_CONSUMPTION", "EVENT_PAYLOAD_FIELD", "PERSISTENCE_ENTITY", "PERSISTENCE_TABLE", "PERSISTENCE_COLUMN", "REPOSITORY", "PROJECTION_WRITE", "PROCESS_START", "PROCESS_WAIT", "PROCESS_DISPATCH", "PROCESS_COMPLETION", "BEAN_DEFINITION", "BEAN_INJECTION", "BEAN_CONDITION", "CONFIGURATION_PROPERTY", "AOP_ADVISOR", "RUNTIME_MEASUREMENT"] }, "subject": { "type": "string", "minLength": 1 }, "attributes": { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }, "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } } },
       "additionalProperties": false
     },
     "factRelation": {

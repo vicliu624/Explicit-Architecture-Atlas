@@ -38,6 +38,8 @@ flowchart LR
 
 启动器默认只绑定 `127.0.0.1` / 回环地址，且当前 V1 没有身份认证。因此它不能直接暴露到办公网或公网；将来需要远程访问时，应先放在具备认证、授权和审计能力的网关之后。
 
+独立的 `atlas-web` 可以通过本地同源代理调用 runner。为支持这种本地联调，runner 只会向 `http(s)://localhost:*`、`http(s)://127.0.0.1:*` 或 `http(s)://[::1]:*` 返回 CORS 许可；不会向任意 Origin 开放。CORS 不是鉴权，回环监听和专家源码显式开关仍是当前版本的实际边界。Web 的启动方式见 [atlas-web：角色化 Explorer](../web/01-atlas-web.md)。
+
 若需要让专家界面从 source JAR 展开源码，必须明确启用：
 
 ```powershell
@@ -59,9 +61,11 @@ Package ID 是稳定文本，例如 `package:etc:current`。放入 URL path 时�
 | `GET /api/v1/packages/{id}/overview` | Package 摘要 | 来源版本、生成时间、节点/关系计数、覆盖声明、运行态可用性 |
 | `GET /api/v1/packages/{id}/business` | 业务视图 | 领域概念、规则、事件、投影用途与落点、Saga、接口 |
 | `GET /api/v1/packages/{id}/operations` | 运维视图 | 运行态采集可用性、Projection / Process Manager 健康度、影响目标、处置建议、诊断 |
-| `GET /api/v1/packages/{id}/expert` | 专家视图 | 事件生产/消费证据、投影目的地关系、接口静态调用路径、源码定位 |
+| `GET /api/v1/packages/{id}/expert` | 专家视图 | 事件生产/消费证据、投影目的地关系、接口轻量静态调用预览、源码定位 |
+| `GET /api/v1/packages/{id}/endpoints/{endpointId}/trace` | 按需完整执行图 | 一个 HTTP 入口可达的调用、命令、Handler、事件、Saga、投影、数据与约束关系；保留原始关系和遍历方向 |
 | `GET /api/v1/packages/{id}/assets/{assetId}` | 专家资产详情 | 属性、关系、可见证据、已脱敏 Runtime Observation 与 source 可用性 |
 | `GET /api/v1/packages/{id}/assets/{assetId}/source` | 专家源码正文 | 仅在 `--enable-expert-source` 下，按 Package 已知资产从声明的 source JAR 返回源码 |
+| `GET /api/v1/packages/{id}/scenarios/{scenarioId}` | 命名场景解析 | 激活/排除 Bean、注入候选与选择、静态调用的场景有效分派、声明 Advisor 和未决原因 |
 
 例如：
 
@@ -69,6 +73,8 @@ Package ID 是稳定文本，例如 `package:etc:current`。放入 URL path 时�
 GET http://127.0.0.1:8080/api/v1/packages/package%3Aetc%3Acurrent/business
 GET http://127.0.0.1:8080/api/v1/packages/package%3Aetc%3Acurrent/operations
 GET http://127.0.0.1:8080/api/v1/packages/package%3Aetc%3Acurrent/expert
+GET http://127.0.0.1:8080/api/v1/packages/package%3Aetc%3Acurrent/endpoints/endpoint%3Aorder-create/trace
+GET http://127.0.0.1:8080/api/v1/packages/package%3Aetc%3Acurrent/scenarios/scenario%3Aproduction
 ```
 
 ## 三种视图的语义边界
@@ -91,7 +97,9 @@ Runtime Overlay 存在后，Projection 和 Process Manager 的状态为 `SUCCEED
 
 ### 专家视图
 
-专家视图提供支撑结论的静态边及其证据，也提供接口调用链。调用链从 `EndpointOperation` 开始，经过其 `REPRESENTS` 的代码元素，沿已证明的 `CALLS` 边向下展开；每条路径有 12 层深度、每个接口最多 64 条路径，以避免循环和异常大的图让界面失去可读性。
+专家视图提供支撑结论的静态边及其证据，也提供接口调用链。首页调用预览从 `EndpointOperation` 开始，经过其 `REPRESENTS` 的代码元素，沿已证明的 `CALLS` 边向下展开；每条预览路径有 12 层深度、每个接口最多 64 条路径，以避免循环和异常大的图让界面失去可读性。这个上限只作用于预览，不是调用链边界。
+
+用户选择入口后，`/endpoints/{endpointId}/trace` 返回 `ExecutionGraph`：它不把分支和循环压成有限简单路径，并从入口沿 `REPRESENTS`、`CALLS`、`DISPATCHES`、反向 `HANDLES`、`PRODUCES`、`CONSUMES`、Saga、Projection、数据读写、校验与约束关系继续遍历。每条边携带事实方向、为表达“命令 → Handler”等运行顺序所用的遍历方向及证据；前端可完整渲染、分组展开，且每个代码节点可继续打开受控源码。
 
 专家源码正文是独立端点，而不是放进专家图 JSON 中：
 
@@ -101,6 +109,19 @@ Runtime Overlay 存在后，Projection 和 Process Manager 的状态为 `SUCCEED
 - `SourceArchiveReader` 只在 Workspace 明确声明的 source JAR 中查找；
 - 返回体不含 source JAR 或 Workspace 的绝对路径。
 
+### 命名场景视图
+
+场景路由只接受已经编译进 Package 的稳定 `scenarioId`。它不会接收 Profile、任意属性、文件路径或服务器环境变量，也不会启动被分析应用；因此远程请求不能借此读取或影响服务端运行环境。
+
+返回的 `invocations` 不会把静态 `CALLS` 关系伪装成运行时事实。每一项同时给出 `staticTargetCodeId`、与调用表达式匹配的 `receiverInjectionPointIds`、活动候选 Bean、按 Qualifier/Primary 等选出的 Bean、能够在 Package 中唯一定位的 `effectiveTargetCodeIds`，以及源码声明的 Advisor。其状态含义为：
+
+- `RESOLVED`：调用方 Bean 已激活，接收者命中注入点，Bean 选择唯一，且本地具体实现方法唯一；
+- `EXCLUDED`：调用方组件在该场景没有激活；
+- `UNRESOLVED`：属性脱敏、条件/Bean 选择不确定、Provider 延迟获取、实现来自未纳入的依赖或重载分派不足以唯一确定；
+- `STATIC_ONLY`：没有足够证据把调用接收者关联到容器注入点，仍只是源码层调用。
+
+`declaredAdvisorIds` 是源码发现的可能拦截器，不代表已观察到的真实代理顺序；后者只能由受控 Runtime Overlay 证实。
+
 ## 错误语义
 
 所有响应均为 UTF-8 JSON。常见错误代码：
@@ -108,10 +129,11 @@ Runtime Overlay 存在后，Projection 和 Process Manager 的状态为 `SUCCEED
 | HTTP 状态 | 错误代码 | 含义 |
 | --- | --- | --- |
 | `400` | `INVALID_REQUEST` | Package / 资产身份不合法等请求格式问题 |
-| `404` | `PACKAGE_NOT_FOUND`、`ASSET_NOT_FOUND`、`SOURCE_NOT_FOUND` | Package、资产或受控源文件不存在 |
+| `404` | `PACKAGE_NOT_FOUND`、`ASSET_NOT_FOUND`、`SOURCE_NOT_FOUND`、`SCENARIO_NOT_FOUND` | Package、资产、受控源文件或命名场景不存在 |
 | `404` | `VIEW_NOT_FOUND`、`ROUTE_NOT_FOUND` | 不支持的视图或路由 |
 | `405` | `METHOD_NOT_ALLOWED` | V1 查询 API 只支持 `GET` |
 | `409` | `EXPERT_SOURCE_DISABLED` | 未显式启用 source JAR 查看 |
+| `409` | `SCENARIO_QUERY_DISABLED` | 服务组合根未启用命名场景查询 |
 | `500` | `INTERNAL_ERROR` | 服务端无法完成查询；不会把内部异常或本机路径写回客户端 |
 
 ## 给后续渲染器的约束

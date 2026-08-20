@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <parent><groupId>io.github.vicliu624.explicitarchitecture</groupId><artifactId>explicit-architecture-atlas-parent</artifactId><version>0.1.0-SNAPSHOT</version><relativePath>../../../atlas-parent/pom.xml</relativePath></parent>
+    <parent><groupId>io.github.vicliu624.explicitarchitecture</groupId><artifactId>explicit-architecture-atlas-parent</artifactId><version>0.0.1</version><relativePath>../../../atlas-parent/pom.xml</relativePath></parent>
     <artifactId>explicit-architecture-atlas-fixture-strict-explicit-java</artifactId>
     <name>Explicit Architecture Atlas :: Fixture :: Strict Explicit Java</name>
     <properties>
@@ -34,6 +34,23 @@
                         <path><groupId>${project.groupId}</groupId><artifactId>explicit-architecture-atlas-annotation-processor</artifactId><version>${project.version}</version></path>
                     </annotationProcessorPaths>
                 </configuration>
+            </plugin>
+            <!-- 真实执行公开 Maven Plugin，验证注解清单与通用源码事实可在被分析工程内归一为 Package。 -->
+            <plugin>
+                <groupId>io.github.vicliu624.explicitarchitecture</groupId>
+                <artifactId>explicit-architecture-atlas-maven-plugin</artifactId>
+                <version>${project.version}</version>
+                <executions>
+                    <execution>
+                        <id>extract-fixture-atlas-package</id>
+                        <goals><goal>extract</goal></goals>
+                        <configuration>
+                            <packageId>package:fixture:strict-explicit</packageId>
+                            <projectId>project:fixture:strict-explicit</projectId>
+                            <sourceRevision>fixture-${project.version}</sourceRevision>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

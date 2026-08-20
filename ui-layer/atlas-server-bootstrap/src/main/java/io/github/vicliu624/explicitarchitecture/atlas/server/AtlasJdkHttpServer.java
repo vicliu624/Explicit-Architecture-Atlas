@@ -8,7 +8,9 @@ import io.github.vicliu624.explicitarchitecture.atlas.http.AtlasHttpRouter;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -48,15 +50,54 @@ public final class AtlasJdkHttpServer implements AutoCloseable {
     }
 
     private static void handle(HttpExchange exchange, AtlasHttpRouter router) throws IOException {
+        if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+            if (!applyLoopbackCors(exchange)) {
+                exchange.sendResponseHeaders(403, -1);
+            } else {
+                exchange.sendResponseHeaders(204, -1);
+            }
+            exchange.close();
+            return;
+        }
         AtlasHttpResponse response = router.route(exchange.getRequestMethod(), exchange.getRequestURI().getRawPath());
         byte[] bytes = response.body().getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", response.contentType());
         exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+        applyLoopbackCors(exchange);
         exchange.sendResponseHeaders(response.status(), bytes.length);
         try (var output = exchange.getResponseBody()) {
             output.write(bytes);
         } finally {
             exchange.close();
+        }
+    }
+
+    /**
+     * 独立 atlas-web 默认也绑定在回环地址，因此可以直接读取本地 runner；绝不把这个本机服务的 CORS 放宽为任意 Origin。
+     * CORS 不是鉴权边界，真正的边界仍是回环绑定和专家源码显式开关。
+     */
+    private static boolean applyLoopbackCors(HttpExchange exchange) {
+        String origin = exchange.getRequestHeaders().getFirst("Origin");
+        if (origin == null || !isLoopbackOrigin(origin)) {
+            return false;
+        }
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", origin);
+        exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, OPTIONS");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Accept, Content-Type");
+        exchange.getResponseHeaders().set("Vary", "Origin");
+        return true;
+    }
+
+    private static boolean isLoopbackOrigin(String value) {
+        try {
+            URI origin = URI.create(value);
+            if (!Set.of("http", "https").contains(origin.getScheme())) {
+                return false;
+            }
+            // java.net.URI 保留 IPv6 字面量的方括号，例如 "[::1]"。
+            return Set.of("localhost", "127.0.0.1", "[::1]").contains(origin.getHost());
+        } catch (IllegalArgumentException ignored) {
+            return false;
         }
     }
 

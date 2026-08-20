@@ -3,6 +3,8 @@ package io.github.vicliu624.explicitarchitecture.atlas.application.api;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasId;
 
 import java.nio.file.Path;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -18,7 +20,8 @@ public record AtlasWorkspace(
         WorkspaceSources sources,
         Optional<WorkspaceContent> content,
         Optional<WorkspaceRuntime> runtime,
-        Optional<Path> conventionProfileFile) {
+        Optional<Path> conventionProfileFile,
+        List<WorkspaceScenario> scenarios) {
 
     public AtlasWorkspace {
         Objects.requireNonNull(schemaVersion, "schemaVersion 不能为空");
@@ -33,5 +36,19 @@ public record AtlasWorkspace(
         runtime = Objects.requireNonNull(runtime, "runtime 不能为空");
         conventionProfileFile = Objects.requireNonNull(conventionProfileFile, "conventionProfileFile 不能为空")
                 .map(path -> path.toAbsolutePath().normalize());
+        scenarios = List.copyOf(Objects.requireNonNull(scenarios, "scenarios 不能为空").stream()
+                .map(scenario -> Objects.requireNonNull(scenario, "scenario 不能为空"))
+                .sorted(Comparator.comparing(WorkspaceScenario::scenarioId)).toList());
+    }
+
+    public AtlasWorkspace(
+            String schemaVersion,
+            AtlasId workspaceId,
+            WorkspaceProject project,
+            WorkspaceSources sources,
+            Optional<WorkspaceContent> content,
+            Optional<WorkspaceRuntime> runtime,
+            Optional<Path> conventionProfileFile) {
+        this(schemaVersion, workspaceId, project, sources, content, runtime, conventionProfileFile, List.of());
     }
 }

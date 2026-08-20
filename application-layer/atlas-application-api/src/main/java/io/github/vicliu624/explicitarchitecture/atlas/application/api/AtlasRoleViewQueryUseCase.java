@@ -20,5 +20,20 @@ public interface AtlasRoleViewQueryUseCase {
 
     Optional<ExpertAtlasView> findExpertView(AtlasId packageId);
 
+    /**
+     * 按需读取一个 HTTP 入口的完整可达执行图。
+     *
+     * <p>专家首页只携带端点的轻量调用预览，避免大型工程的数百个入口一次性展开成不可传输的全图。调用方在用户
+     * 明确选择入口后再通过此查询获取该入口的 {@link ExpertAtlasView.ExecutionGraph}。</p>
+     */
+    default Optional<ExpertAtlasView.EndpointTrace> findExpertEndpointTrace(AtlasId packageId, AtlasId endpointId) {
+        return Optional.empty();
+    }
+
+    /** 以稳定的 Java handler 签名或唯一的 {@code Type#method} 前缀定位端点；用于按需追踪。 */
+    default Optional<ExpertAtlasView.EndpointTrace> findExpertEndpointTraceByHandler(AtlasId packageId, String handlerQualifiedName) {
+        return Optional.empty();
+    }
+
     Optional<ExpertAtlasView.AssetDetail> findExpertAssetDetail(AtlasId packageId, AtlasId assetId);
 }

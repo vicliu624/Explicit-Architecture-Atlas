@@ -2,6 +2,7 @@ package io.github.vicliu624.explicitarchitecture.atlas.http;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import io.github.vicliu624.explicitarchitecture.atlas.application.api.AtlasRoleViewQueryUseCase;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasId;
 
@@ -24,19 +25,34 @@ public final class AtlasHttpRouter {
 
     private final AtlasRoleViewQueryUseCase views;
     private final Optional<AtlasExpertSourceHttpQuery> sourceQuery;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final Optional<AtlasScenarioHttpQuery> scenarioQuery;
+    // Scenario diagnostics 使用 Optional 表示“没有源码定位”；HTTP JSON 必须将其稳定地编码为 null，不能让一次
+    // 有诊断的真实工程查询在序列化阶段失败。
+    private final ObjectMapper mapper = new ObjectMapper().registerModule(new Jdk8Module());
 
     public AtlasHttpRouter(AtlasRoleViewQueryUseCase views) {
-        this(views, Optional.empty());
+        this(views, Optional.empty(), Optional.empty());
     }
 
     public AtlasHttpRouter(AtlasRoleViewQueryUseCase views, AtlasExpertSourceHttpQuery sourceQuery) {
-        this(views, Optional.of(Objects.requireNonNull(sourceQuery, "sourceQuery 不能为空")));
+        this(views, Optional.of(Objects.requireNonNull(sourceQuery, "sourceQuery 不能为空")), Optional.empty());
     }
 
-    private AtlasHttpRouter(AtlasRoleViewQueryUseCase views, Optional<AtlasExpertSourceHttpQuery> sourceQuery) {
+    /** 同时启用受控源码和命名场景查询；空源码查询保留“专家源码未启用”的响应语义。 */
+    public AtlasHttpRouter(
+            AtlasRoleViewQueryUseCase views,
+            Optional<AtlasExpertSourceHttpQuery> sourceQuery,
+            AtlasScenarioHttpQuery scenarioQuery) {
+        this(views, sourceQuery, Optional.of(Objects.requireNonNull(scenarioQuery, "scenarioQuery 不能为空")));
+    }
+
+    private AtlasHttpRouter(
+            AtlasRoleViewQueryUseCase views,
+            Optional<AtlasExpertSourceHttpQuery> sourceQuery,
+            Optional<AtlasScenarioHttpQuery> scenarioQuery) {
         this.views = Objects.requireNonNull(views, "views 不能为空");
         this.sourceQuery = Objects.requireNonNull(sourceQuery, "sourceQuery 不能为空");
+        this.scenarioQuery = Objects.requireNonNull(scenarioQuery, "scenarioQuery 不能为空");
     }
 
     public AtlasHttpResponse route(String method, String rawPath) {
@@ -57,8 +73,23 @@ public final class AtlasHttpRouter {
             if (segments.size() == 5) {
                 return packageView(packageId, view);
             }
+            if (segments.size() == 6 && view.equals("scenarios")) {
+                if (scenarioQuery.isEmpty()) {
+                    return error(409, "SCENARIO_QUERY_DISABLED", "服务未启用命名配置场景查询。");
+                }
+                return from(scenarioQuery.orElseThrow().resolve(packageId, AtlasId.of(segments.get(5))),
+                        "SCENARIO_NOT_FOUND", "指定 Package 中没有该配置场景。");
+            }
             if (segments.size() == 6 && view.equals("assets")) {
                 return from(views.findExpertAssetDetail(packageId, AtlasId.of(segments.get(5))), "ASSET_NOT_FOUND", "未找到指定 Atlas 资产。");
+            }
+            if (segments.size() == 7 && view.equals("endpoints") && segments.get(6).equals("trace")) {
+                return from(views.findExpertEndpointTrace(packageId, AtlasId.of(segments.get(5))),
+                        "ENDPOINT_TRACE_NOT_FOUND", "未找到指定 HTTP 端点或其完整执行图。");
+            }
+            if (segments.size() == 7 && view.equals("handlers") && segments.get(6).equals("trace")) {
+                return from(views.findExpertEndpointTraceByHandler(packageId, segments.get(5)),
+                        "ENDPOINT_TRACE_NOT_FOUND", "未找到指定 Java handler 或其完整执行图。");
             }
             if (segments.size() == 7 && view.equals("assets") && segments.get(6).equals("source")) {
                 if (sourceQuery.isEmpty()) {

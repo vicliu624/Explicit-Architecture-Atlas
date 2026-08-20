@@ -3,27 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Explicit Architecture Atlas：把显式架构事实解释为业务、运维和专家都可阅读的知识地图。" />
     <title>Explicit Architecture Atlas</title>
-    <style>
-      :root { font-family: "Microsoft YaHei UI", system-ui, sans-serif; color: #172033; background: #f5f7fb; }
-      body { margin: 0; }
-      main { max-width: 960px; margin: 0 auto; padding: 48px 24px; }
-      .eyebrow { color: #53617d; font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; }
-      h1 { margin: 8px 0; font-size: clamp(2rem, 5vw, 3.5rem); }
-      .lead { color: #53617d; font-size: 1.1rem; max-width: 720px; line-height: 1.7; }
-      #assets { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 32px; }
-      article { background: white; border: 1px solid #dbe2f1; border-radius: 14px; padding: 20px; box-shadow: 0 8px 24px #1e31510d; }
-      .kind { color: #3666c5; font-size: .82rem; font-weight: 700; }
-      .status { color: #387c4b; font-size: .9rem; }
-    </style>
+    <link rel="stylesheet" href="./src/styles.css" />
   </head>
   <body>
-    <main>
-      <div class="eyebrow">Explicit Architecture Atlas</div>
-      <h1>面向业务的架构知识</h1>
-      <p class="lead">前端独立于 Maven 工件发布。它消费版本化 Atlas 数据包，按业务、运维与专家角色渲染同一份可追溯事实。</p>
-      <section id="assets" aria-label="Atlas 数据包示例"></section>
-    </main>
+    <div id="app" aria-live="polite"></div>
     <script type="module" src="./src/main.mjs"></script>
   </body>
 </html>

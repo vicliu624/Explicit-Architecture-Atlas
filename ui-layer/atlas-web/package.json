@@ -5,6 +5,11 @@
   "type": "module",
   "description": "Explicit Architecture Atlas 的独立角色化渲染界面。",
   "scripts": {
-    "check": "node --check src/main.mjs"
+    "check": "node --check src/main.mjs && node --check scripts/dev-server.mjs",
+    "dev": "node scripts/dev-server.mjs",
+    "start": "node scripts/dev-server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

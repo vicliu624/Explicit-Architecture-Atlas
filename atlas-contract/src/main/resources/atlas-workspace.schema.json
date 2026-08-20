@@ -22,6 +22,8 @@
       "required": ["projectRoot", "sourceArchives", "intentManifests"],
       "properties": {
         "projectRoot": { "type": "string", "minLength": 1 },
+        "sourceRoots": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "excludedPaths": { "type": "array", "items": { "type": "string", "minLength": 1 } },
         "sourceArchives": { "type": "array", "items": { "type": "string", "minLength": 1 } },
         "intentManifests": { "type": "array", "items": { "type": "string", "minLength": 1 } }
       },
@@ -38,11 +40,40 @@
       "required": ["enabled"],
       "properties": {
         "enabled": { "type": "boolean" },
+        "providers": { "type": "array", "items": { "type": "string", "minLength": 1 } },
         "observationFiles": { "type": "array", "items": { "type": "string", "minLength": 1 } }
       },
       "additionalProperties": false
     },
-    "conventionProfileFile": { "type": "string", "minLength": 1 }
+    "conventionProfileFile": { "type": "string", "minLength": 1 },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "activeProfiles", "properties", "classpathCapabilities"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "name": { "type": "string", "minLength": 1 },
+          "activeProfiles": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+          "properties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["provenance", "redacted"],
+              "properties": {
+                "provenance": { "type": "string", "minLength": 1 },
+                "value": { "type": "string" },
+                "redacted": { "type": "boolean" }
+              },
+              "allOf": [{ "if": { "properties": { "redacted": { "const": false } } }, "then": { "required": ["value"] }],
+              "additionalProperties": false
+            }
+          },
+          "classpathCapabilities": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+        },
+        "additionalProperties": false
+      }
+    }
   },
   "additionalProperties": false,
   "$defs": {

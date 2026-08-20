@@ -21,6 +21,8 @@ Explicit-Architecture-Atlas/
 ├─ application-layer/
 │  ├─ atlas-application-api/                # 发布的 JAR：用例、查询、仓储端口
 │  └─ atlas-application-core/               # 发布的 JAR：用例编排实现
+├─ core/
+│  └─ atlas-core/                            # 发布的 JAR：仅依赖 Atlas 内层模型的嵌入式 Facade
 │
 ├─ infra-driven/                            # 被动适配器：Atlas 主动读取的外部技术事实
 │  ├─ atlas-analysis-spi/                   # 发布的 JAR：分析器插件端口
@@ -37,8 +39,14 @@ Explicit-Architecture-Atlas/
 ├─ infra-driving/                           # 主动适配器：用户或构建工具如何启动 Atlas
 │  ├─ atlas-annotations/                    # 发布的 JAR：零框架依赖的 SOURCE 注解 API
 │  ├─ atlas-annotation-processor/           # 发布的 JAR：编译时意图索引处理器
-│  ├─ atlas-maven-plugin/                   # 发布的 Maven Plugin：atlas:extract 扩展点
-│  └─ atlas-cli/                            # 发布的 JAR：命令行入口
+│  ├─ atlas-maven-plugin/                   # 发布的 Maven Plugin：在 target/atlas 写出通用静态 Package
+│  ├─ atlas-cli/                            # 发布的 JAR：JVM/Maven 通用命令行入口
+│  ├─ atlas-cli-full/                       # 发布的 JAR：显式全适配器 fat JAR 分发
+│  ├─ atlas-starter-jvm/                    # 发布的 POM：JVM/Maven 通用适配器组合
+│  ├─ atlas-starter-spring/                 # 发布的 POM：显式 Spring 适配器组合
+│  ├─ atlas-starter-axon/                   # 发布的 POM：显式 Axon 适配器组合
+│  ├─ atlas-starter-jpa/                    # 发布的 POM：显式 JPA 适配器组合
+│  └─ atlas-starter-full/                   # 发布的 POM：显式全适配器组合
 │
 ├─ ui-layer/
 │  ├─ atlas-http-api/                       # 发布的 JAR：HTTP 查询边界，不绑定 Web 框架
@@ -68,7 +76,7 @@ Explicit-Architecture-Atlas/
 | 领域模型与应用 API | 是，`jar` | 可作为稳定二进制/源码 API 复用 | 适配器、测试、服务端 |
 | `atlas-application-core` | 是，`jar` | 可由不同驱动方式调用的用例编排 | CLI、HTTP Server |
 | 分析 SPI 与每个技术适配器 | 是，`jar` | 让 Spring、Axon、JPA 等依赖保持可选 | 仅需要该技术栈的部署 |
-| 注解、处理器、Maven Plugin、CLI | 是，`jar`/`maven-plugin` | 供被分析工程的构建过程直接使用 | 被分析项目的构建、CI |
+| 注解、处理器、Maven Plugin、CLI、Starter | 是，`jar`/`maven-plugin`/`pom` | 供被分析工程的构建过程直接使用；Starter 显式选择技术适配器 | 被分析项目的构建、CI |
 | HTTP API / Server Bootstrap | 是，`jar` | 支持不同 Web 运行时的组合 | 自建 Atlas 服务 |
 | `atlas-web` | 否 | 是角色化 UI，不应成为 Java 传递依赖 | 浏览器/CDN/容器镜像 |
 | 测试、fixture、docs、scripts | 否 | 只用于质量验证与仓库维护 | 贡献者、CI |

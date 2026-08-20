@@ -7,13 +7,20 @@ import io.github.vicliu624.explicitarchitecture.atlas.application.api.AtlasWorks
 import io.github.vicliu624.explicitarchitecture.atlas.application.api.WorkspaceContent;
 import io.github.vicliu624.explicitarchitecture.atlas.application.api.WorkspaceProject;
 import io.github.vicliu624.explicitarchitecture.atlas.application.api.WorkspaceRuntime;
+import io.github.vicliu624.explicitarchitecture.atlas.application.api.WorkspaceScenario;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ApplicationContextScope;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.BeanDefinitionOverridePolicy;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ClasspathCapabilityCompleteness;
 import io.github.vicliu624.explicitarchitecture.atlas.application.api.WorkspaceSources;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasId;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ScenarioProperty;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -37,14 +44,18 @@ public final class AtlasWorkspaceYamlReader {
                         requiredText(project, "displayName", normalizedFile)),
                 new WorkspaceSources(
                         resolvePath(configurationDirectory, requiredText(sources, "projectRoot", normalizedFile)),
+                        pathList(configurationDirectory, sources.path("sourceRoots"), normalizedFile, "sourceRoots"),
+                        pathList(configurationDirectory, sources.path("excludedPaths"), normalizedFile, "excludedPaths"),
                         pathList(configurationDirectory, sources.path("sourceArchives"), normalizedFile, "sourceArchives"),
                         pathList(configurationDirectory, sources.path("intentManifests"), normalizedFile, "intentManifests")),
                 optionalObject(root, "content").map(content -> new WorkspaceContent(
                         resolvePath(configurationDirectory, requiredText(content, "root", normalizedFile)))),
                 optionalObject(root, "runtime").map(runtime -> new WorkspaceRuntime(
                         runtime.path("enabled").asBoolean(false),
+                        textList(runtime.path("providers"), normalizedFile, "runtime.providers"),
                         pathList(configurationDirectory, runtime.path("observationFiles"), normalizedFile, "runtime.observationFiles"))),
-                optionalText(root, "conventionProfileFile").map(value -> resolvePath(configurationDirectory, value)));
+                optionalText(root, "conventionProfileFile").map(value -> resolvePath(configurationDirectory, value)),
+                scenarios(root.path("scenarios"), normalizedFile));
     }
 
     private JsonNode readTree(Path file) {
@@ -109,6 +120,128 @@ public final class AtlasWorkspaceYamlReader {
             paths.add(resolvePath(root, item.asText()));
         }
         return List.copyOf(paths);
+    }
+
+    private static List<String> textList(JsonNode node, Path file, String field) {
+        if (node.isMissingNode() || node.isNull()) {
+            return List.of();
+        }
+        if (!node.isArray()) {
+            throw new IllegalArgumentException("Workspace 字段 " + field + " 必须是数组: " + file);
+        }
+        java.util.ArrayList<String> values = new java.util.ArrayList<>();
+        for (JsonNode item : node) {
+            if (!item.isTextual() || item.asText().isBlank()) {
+                throw new IllegalArgumentException("Workspace 数组 " + field + " 只能包含非空文本: " + file);
+            }
+            values.add(item.asText().trim());
+        }
+        return List.copyOf(values);
+    }
+
+    private static List<WorkspaceScenario> scenarios(JsonNode node, Path file) {
+        if (node.isMissingNode() || node.isNull()) {
+            return List.of();
+        }
+        if (!node.isArray()) {
+            throw new IllegalArgumentException("Workspace 字段 scenarios 必须是数组: " + file);
+        }
+        java.util.ArrayList<WorkspaceScenario> scenarios = new java.util.ArrayList<>();
+        for (JsonNode value : node) {
+            if (!value.isObject()) {
+                throw new IllegalArgumentException("Workspace scenarios 只能包含对象: " + file);
+            }
+            scenarios.add(new WorkspaceScenario(
+                    AtlasId.of(requiredText(value, "id", file)),
+                    requiredText(value, "name", file),
+                    textList(value.path("activeProfiles"), file, "scenarios.activeProfiles"),
+                    scenarioProperties(value.path("properties"), file),
+                    textList(value.path("classpathCapabilities"), file, "scenarios.classpathCapabilities"),
+                    classpathCompleteness(value.path("classpathCompleteness"), file),
+                    applicationContext(value.path("applicationContext"), file)));
+        }
+        return List.copyOf(scenarios);
+    }
+
+    private static ClasspathCapabilityCompleteness classpathCompleteness(JsonNode node, Path file) {
+        if (node.isMissingNode() || node.isNull()) {
+            return ClasspathCapabilityCompleteness.PARTIAL;
+        }
+        if (!node.isTextual() || node.asText().isBlank()) {
+            throw new IllegalArgumentException("Workspace scenarios.classpathCompleteness 必须为非空文本: " + file);
+        }
+        try {
+            return ClasspathCapabilityCompleteness.valueOf(node.asText().trim());
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("未知 scenarios.classpathCompleteness: " + node.asText(), invalid);
+        }
+    }
+
+    /**
+     * 读取一个启动上下文边界。缺省配置仍可读取历史 Workspace，但明确降级为 global/unbounded，而非悄悄假设所有
+     * 源码属于同一个可执行应用。
+     */
+    private static ApplicationContextScope applicationContext(JsonNode node, Path file) {
+        if (node.isMissingNode() || node.isNull()) {
+            return ApplicationContextScope.global();
+        }
+        if (!node.isObject()) {
+            throw new IllegalArgumentException("Workspace scenarios.applicationContext 必须是对象: " + file);
+        }
+        JsonNode overridesNode = node.path("explicitBeanOverrides");
+        if (!overridesNode.isMissingNode() && !overridesNode.isObject()) {
+            throw new IllegalArgumentException("Workspace applicationContext.explicitBeanOverrides 必须是对象: " + file);
+        }
+        Map<String, String> overrides = new LinkedHashMap<>();
+        if (overridesNode.isObject()) {
+            overridesNode.fields().forEachRemaining(entry -> {
+                if (!entry.getValue().isTextual() || entry.getValue().asText().isBlank()) {
+                    throw new IllegalArgumentException("Workspace 显式 Bean 覆盖必须为非空文本: " + entry.getKey());
+                }
+                overrides.put(entry.getKey(), entry.getValue().asText().trim());
+            });
+        }
+        String policy = node.path("beanDefinitionOverridePolicy").isMissingNode()
+                ? BeanDefinitionOverridePolicy.UNSPECIFIED.name()
+                : requiredText(node, "beanDefinitionOverridePolicy", file);
+        try {
+            return new ApplicationContextScope(
+                    requiredText(node, "id", file),
+                    textList(node.path("entryPointTypes"), file, "applicationContext.entryPointTypes"),
+                    textList(node.path("rootModuleCoordinates"), file, "applicationContext.rootModuleCoordinates"),
+                    textList(node.path("sourcePathPrefixes"), file, "applicationContext.sourcePathPrefixes"),
+                    textList(node.path("componentScanPackages"), file, "applicationContext.componentScanPackages"),
+                    BeanDefinitionOverridePolicy.valueOf(policy),
+                    overrides);
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("Workspace applicationContext 无效: " + invalid.getMessage(), invalid);
+        }
+    }
+
+    private static Map<String, ScenarioProperty> scenarioProperties(JsonNode node, Path file) {
+        if (!node.isObject()) {
+            throw new IllegalArgumentException("Workspace scenarios.properties 必须是对象: " + file);
+        }
+        Map<String, ScenarioProperty> properties = new LinkedHashMap<>();
+        node.fields().forEachRemaining(entry -> {
+            JsonNode value = entry.getValue();
+            if (!value.isObject()) {
+                throw new IllegalArgumentException("Workspace 场景属性必须是对象: " + entry.getKey());
+            }
+            JsonNode redacted = value.path("redacted");
+            if (!redacted.isBoolean()) {
+                throw new IllegalArgumentException("Workspace 场景属性必须显式声明 redacted: " + entry.getKey());
+            }
+            boolean isRedacted = redacted.asBoolean();
+            if (!isRedacted && (!value.path("value").isTextual() || value.path("value").asText().isBlank())) {
+                throw new IllegalArgumentException("非脱敏场景属性必须声明非空 value: " + entry.getKey());
+            }
+            properties.put(entry.getKey(), new ScenarioProperty(
+                    requiredText(value, "provenance", file),
+                    value.path("value").isTextual() ? value.path("value").asText() : "",
+                    isRedacted));
+        });
+        return Map.copyOf(properties);
     }
 
     private static Path resolvePath(Path configurationDirectory, String value) {

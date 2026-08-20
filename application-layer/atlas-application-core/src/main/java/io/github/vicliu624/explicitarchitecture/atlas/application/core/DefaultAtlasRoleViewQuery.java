@@ -24,6 +24,9 @@ import io.github.vicliu624.explicitarchitecture.atlas.domain.AtlasValue;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.Audience;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.BusinessConcept;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.CodeElement;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ComponentDefinition;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ConfigurationProperty;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.ConfigurationScenario;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.ContentEntry;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.DataTarget;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.DomainConstraint;
@@ -32,11 +35,17 @@ import io.github.vicliu624.explicitarchitecture.atlas.domain.EndpointOperation;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.Evidence;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.EvidenceVisibility;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.ExternalBoundary;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.InjectionPoint;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.OperationContract;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.OperationFailure;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.OperationInput;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.OperationOutcome;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.ProcessManager;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.Projection;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.RelationKind;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.RuntimeAssetHealth;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.RuntimeObservation;
+import io.github.vicliu624.explicitarchitecture.atlas.domain.SemanticValue;
 import io.github.vicliu624.explicitarchitecture.atlas.domain.SourceLocator;
 
 import java.util.ArrayList;
@@ -92,6 +101,33 @@ public final class DefaultAtlasRoleViewQuery implements AtlasRoleViewQueryUseCas
     @Override
     public Optional<ExpertAtlasView> findExpertView(AtlasId packageId) {
         return atlasPackage(packageId).map(this::expertView);
+    }
+
+    @Override
+    public Optional<ExpertAtlasView.EndpointTrace> findExpertEndpointTrace(AtlasId packageId, AtlasId endpointId) {
+        Objects.requireNonNull(endpointId, "endpointId 不能为空");
+        return atlasPackage(packageId).flatMap(atlasPackage -> {
+            Index index = new Index(atlasPackage);
+            return index.asset(endpointId).filter(EndpointOperation.class::isInstance).map(EndpointOperation.class::cast)
+                    .map(endpoint -> endpointTrace(index, endpoint, true));
+        });
+    }
+
+    @Override
+    public Optional<ExpertAtlasView.EndpointTrace> findExpertEndpointTraceByHandler(AtlasId packageId, String handlerQualifiedName) {
+        String handler = Objects.requireNonNull(handlerQualifiedName, "handlerQualifiedName 不能为空").trim();
+        if (handler.isEmpty()) {
+            throw new IllegalArgumentException("handlerQualifiedName 不能为空白");
+        }
+        return atlasPackage(packageId).flatMap(atlasPackage -> {
+            Index index = new Index(atlasPackage);
+            List<EndpointOperation> matches = index.assetsOf(EndpointOperation.class).stream()
+                    .filter(endpoint -> index.representedCode(endpoint.id()).stream()
+                            .anyMatch(code -> code.qualifiedName().equals(handler)
+                                    || (!handler.contains("(") && code.qualifiedName().startsWith(handler + "("))))
+                    .toList();
+            return matches.size() == 1 ? Optional.of(endpointTrace(index, matches.getFirst(), true)) : Optional.empty();
+        });
     }
 
     @Override
@@ -242,7 +278,7 @@ public final class DefaultAtlasRoleViewQuery implements AtlasRoleViewQueryUseCas
         return new ExpertAtlasView(
                 summary(atlasPackage),
                 index.assetsOf(DomainEvent.class).stream().map(event -> expertEventTrace(index, event)).toList(),
-                index.assetsOf(EndpointOperation.class).stream().map(endpoint -> endpointTrace(index, endpoint)).toList(),
+                index.assetsOf(EndpointOperation.class).stream().map(endpoint -> endpointTrace(index, endpoint, false)).toList(),
                 index.assetsOf(CodeElement.class).stream()
                         .filter(code -> code.locator().uri().startsWith("project://"))
                         .map(code -> new ExpertAtlasView.SourceBackedAsset(reference(code), code.qualifiedName(), location(code.locator())))
@@ -266,7 +302,7 @@ public final class DefaultAtlasRoleViewQuery implements AtlasRoleViewQueryUseCas
                         .toList());
     }
 
-    private ExpertAtlasView.EndpointTrace endpointTrace(Index index, EndpointOperation endpoint) {
+    private ExpertAtlasView.EndpointTrace endpointTrace(Index index, EndpointOperation endpoint, boolean includeExecutionGraph) {
         List<CodeElement> representations = index.representedCode(endpoint.id());
         List<ExpertAtlasView.CallPath> paths = new ArrayList<>();
         for (CodeElement code : representations) {
@@ -282,7 +318,89 @@ public final class DefaultAtlasRoleViewQuery implements AtlasRoleViewQueryUseCas
                 valuesAttribute(endpoint.attributes(), "httpMethods"),
                 valuesAttribute(endpoint.attributes(), "paths"),
                 paths.stream().distinct().limit(MAX_CALL_PATHS_PER_ENDPOINT).toList(),
+                includeExecutionGraph ? executionGraph(index, endpoint) : new ExpertAtlasView.ExecutionGraph(List.of(), List.of()),
                 relationViews(effects, index, Role.EXPERT));
+    }
+
+    /**
+     * 以图而非“若干条简单路径”表达入口完整可达关系。
+     *
+     * <p>一条路径预览必须限制深度和数量，否则分支/循环会使 UI 无法使用；但这不应让 Package 丢失可达的 Handler、
+     * 事件消费者或投影。该图以 visited 节点保证有限，并保留每一条原始关系的证据和遍历方向。调用方可以用它绘制
+     * 全图、分段展开，或自行选择一条路径，而不会把预览上限误解为架构边界。</p>
+     */
+    private ExpertAtlasView.ExecutionGraph executionGraph(Index index, EndpointOperation endpoint) {
+        Map<AtlasId, ArchitectureAsset> reachable = new LinkedHashMap<>();
+        Map<String, ExpertAtlasView.TraceRelation> transitions = new LinkedHashMap<>();
+        List<AtlasId> pending = new ArrayList<>(List.of(endpoint.id()));
+        Set<AtlasId> visited = new LinkedHashSet<>();
+        while (!pending.isEmpty()) {
+            AtlasId current = pending.removeFirst();
+            if (!visited.add(current)) {
+                continue;
+            }
+            ArchitectureAsset currentAsset = index.asset(current).orElse(null);
+            if (currentAsset == null) {
+                continue;
+            }
+            reachable.put(current, currentAsset);
+            for (ExecutionTransition transition : executionTransitions(index, current)) {
+                ArchitectureAsset target = index.asset(transition.targetId()).orElse(null);
+                if (target == null) {
+                    continue;
+                }
+                reachable.put(target.id(), target);
+                AtlasRelationView relation = relationViews(List.of(transition.relation()), index, Role.EXPERT).getFirst();
+                // 同一条原始关系可能因 REPRESENTS 的正反遍历再次被看见。图的边以事实 relation id 去重；首次
+                // 到达方向保留为此次执行链的导航方向，防止 UI 把一个事实渲染成两条重复连线。
+                transitions.putIfAbsent(relation.id(), new ExpertAtlasView.TraceRelation(relation, transition.direction()));
+                if (!visited.contains(target.id())) {
+                    pending.add(target.id());
+                }
+            }
+        }
+        return new ExpertAtlasView.ExecutionGraph(
+                reachable.values().stream().sorted(Comparator.comparing(ArchitectureAsset::id))
+                        .map(DefaultAtlasRoleViewQuery::traceNode).toList(),
+                transitions.values().stream().sorted(Comparator.comparing((ExpertAtlasView.TraceRelation item) -> item.relation().id())
+                        .thenComparing(ExpertAtlasView.TraceRelation::traversalDirection)).toList());
+    }
+
+    private List<ExecutionTransition> executionTransitions(Index index, AtlasId current) {
+        List<ExecutionTransition> transitions = new ArrayList<>();
+        index.outgoing(current,
+                        RelationKind.REPRESENTS,
+                        RelationKind.CALLS,
+                        RelationKind.DISPATCHES,
+                        RelationKind.PRODUCES,
+                        RelationKind.CONSUMES,
+                        RelationKind.PUBLISHES,
+                        RelationKind.PROJECTS_TO,
+                        RelationKind.WRITES_TO,
+                        RelationKind.READS_FROM,
+                        RelationKind.CALLS_EXTERNAL,
+                        RelationKind.STARTS,
+                        RelationKind.WAITS_FOR,
+                        RelationKind.COMPLETES,
+                        RelationKind.COMPENSATES,
+                        RelationKind.CONSTRAINS,
+                        RelationKind.VALIDATES,
+                        RelationKind.MUTATES_STATE)
+                .forEach(relation -> transitions.add(new ExecutionTransition(relation, relation.targetId(), "FORWARD")));
+
+        // Command 的语义边方向是 Handler --HANDLES--> Command；从一次派发继续执行时需要反向抵达 Handler。
+        index.incoming(current, RelationKind.HANDLES)
+                .forEach(relation -> transitions.add(new ExecutionTransition(relation, relation.sourceId(), "REVERSE")));
+        // DomainConstraint 的事实方向是 “约束 --CONSTRAINS--> 被约束代码”。沿入口执行到该代码后，必须反向
+        // 抵达约束资产，才能让接口链路同时解释业务判定及其源码强制点。
+        index.incoming(current, RelationKind.CONSTRAINS)
+                .forEach(relation -> transitions.add(new ExecutionTransition(relation, relation.sourceId(), "REVERSE")));
+        // 代码本身的副作用通常挂在 Operation/Endpoint 等语义资产上。反向回到这些 owner 后可继续前进到
+        // DISPATCHES / PRODUCES；visited 集合会消除与正向 REPRESENTS 的往返循环。
+        index.asset(current).filter(CodeElement.class::isInstance).ifPresent(ignored -> index.incoming(current, RelationKind.REPRESENTS)
+                .forEach(relation -> transitions.add(new ExecutionTransition(relation, relation.sourceId(), "REVERSE"))));
+        return transitions.stream().sorted(Comparator.comparing((ExecutionTransition item) -> item.relation().id())
+                .thenComparing(ExecutionTransition::direction)).toList();
     }
 
     private void collectCallPaths(
@@ -322,7 +440,7 @@ public final class DefaultAtlasRoleViewQuery implements AtlasRoleViewQueryUseCas
         return new ExpertAtlasView.AssetDetail(
                 summary(atlasPackage),
                 reference(asset),
-                properties(asset.attributes()),
+                properties(asset),
                 allNarratives(index, asset.id()),
                 asset.evidence().stream().filter(evidence -> visibleTo(evidence, Role.EXPERT)).map(DefaultAtlasRoleViewQuery::evidence).toList(),
                 relationViews(index.incoming(asset.id()), index, Role.EXPERT),
@@ -353,6 +471,13 @@ public final class DefaultAtlasRoleViewQuery implements AtlasRoleViewQueryUseCas
         return new ExpertAtlasView.TraceStep(reference(asset), relationFromPrevious, "", emptyLocation());
     }
 
+    private static ExpertAtlasView.TraceNode traceNode(ArchitectureAsset asset) {
+        if (asset instanceof CodeElement code) {
+            return new ExpertAtlasView.TraceNode(reference(code), code.qualifiedName(), location(code.locator()));
+        }
+        return new ExpertAtlasView.TraceNode(reference(asset), "", emptyLocation());
+    }
+
     private static List<AtlasAssetReference> projectionTargets(Index index, AtlasId projectionId) {
         return index.projectTargetRelations(projectionId).stream()
                 .map(AtlasRelation::targetId).distinct().map(index::asset).flatMap(Optional::stream)
@@ -370,6 +495,133 @@ public final class DefaultAtlasRoleViewQuery implements AtlasRoleViewQueryUseCas
     private static List<AtlasProperty> properties(Map<String, AtlasValue> attributes) {
         return attributes.entrySet().stream().sorted(Map.Entry.comparingByKey())
                 .map(entry -> new AtlasProperty(entry.getKey(), render(entry.getValue()))).toList();
+    }
+
+    /**
+     * 将类型化资产的字段和可扩展 attributes 一并投影到专家 API。关系仍单独返回，避免把一张图压扁成不可追溯的文本；
+     * 这里的字段则让调用方无需理解 domain record 的 Java 序列化细节也能解释入参、返回、条件和注入选择。
+     */
+    private static List<AtlasProperty> properties(ArchitectureAsset asset) {
+        Map<String, String> values = new LinkedHashMap<>();
+        asset.attributes().entrySet().stream().sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> values.put("attribute." + entry.getKey(), render(entry.getValue())));
+        switch (asset) {
+            case SemanticValue value -> {
+                values.put("semantic.category", value.category().name());
+                values.put("semantic.javaRepresentation", value.javaRepresentation());
+                values.put("semantic.cardinality", value.cardinality().name());
+                values.put("semantic.nullability", value.nullability().name());
+                values.put("semantic.trustLevel", value.trustLevel().name());
+                values.put("semantic.sensitivity", value.sensitivity().name());
+                values.put("semantic.lifecycleState", value.lifecycleState());
+            }
+            case OperationContract operation -> addOperationProperties(values, operation);
+            case ComponentDefinition component -> {
+                values.put("component.kind", component.componentKind().name());
+                values.put("component.beanName", component.beanName());
+                values.put("component.declaredType", component.declaredType());
+                values.put("component.candidateType", component.candidateType());
+                values.put("component.scope", component.scope().name());
+                values.put("component.primary", Boolean.toString(component.primary()));
+                addList(values, "component.qualifier", component.qualifiers());
+                addConditionProperties(values, "component.activation", component.activationCondition());
+            }
+            case InjectionPoint injection -> {
+                values.put("injection.ownerComponentId", injection.ownerComponentId().value());
+                values.put("injection.requestedType", injection.requestedType());
+                values.put("injection.kind", injection.injectionKind().name());
+                values.put("injection.cardinality", injection.cardinality().name());
+                values.put("injection.required", Boolean.toString(injection.required()));
+                addList(values, "injection.qualifier", injection.qualifiers());
+            }
+            case ConfigurationProperty property -> {
+                values.put("configuration.key", property.propertyKey());
+                values.put("configuration.declaredDefault", property.declaredDefault());
+                values.put("configuration.sensitivity", property.sensitivity().name());
+            }
+            case ConfigurationScenario scenario -> {
+                addList(values, "scenario.activeProfile", scenario.activeProfiles());
+                addList(values, "scenario.classpathCapability", scenario.classpathCapabilities());
+                values.put("scenario.classpathCompleteness", scenario.classpathCapabilityCompleteness().name());
+                values.put("scenario.applicationContext.id", scenario.applicationContext().contextId());
+                addList(values, "scenario.applicationContext.entryPointType", scenario.applicationContext().entryPointTypes());
+                addList(values, "scenario.applicationContext.rootModule", scenario.applicationContext().rootModuleCoordinates());
+                addList(values, "scenario.applicationContext.sourcePathPrefix", scenario.applicationContext().sourcePathPrefixes());
+                addList(values, "scenario.applicationContext.componentScanPackage", scenario.applicationContext().componentScanPackages());
+                values.put("scenario.applicationContext.beanDefinitionOverridePolicy",
+                        scenario.applicationContext().beanDefinitionOverridePolicy().name());
+                scenario.applicationContext().explicitBeanOverrides().forEach((beanName, candidateType) ->
+                        values.put("scenario.applicationContext.explicitBeanOverride[" + beanName + "]", candidateType));
+                scenario.properties().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+                    String prefix = "scenario.property[" + entry.getKey() + "]";
+                    values.put(prefix + ".provenance", entry.getValue().provenance());
+                    values.put(prefix + ".redacted", Boolean.toString(entry.getValue().redacted()));
+                    values.put(prefix + ".value", entry.getValue().redacted() ? "<redacted>" : entry.getValue().value());
+                });
+            }
+            default -> {
+                // 标准业务资产只使用显式 attributes；类型化扩展在上面的分支中展示。
+            }
+        }
+        return values.entrySet().stream().sorted(Map.Entry.comparingByKey())
+                .map(entry -> new AtlasProperty(entry.getKey(), entry.getValue())).toList();
+    }
+
+    private static void addOperationProperties(Map<String, String> values, OperationContract operation) {
+        values.put("operation.kind", operation.operationKind().name());
+        values.put("operation.javaSignature", operation.javaSignature());
+        values.put("operation.inputCount", Integer.toString(operation.inputs().size()));
+        for (int index = 0; index < operation.inputs().size(); index++) {
+            OperationInput input = operation.inputs().get(index);
+            String prefix = "operation.input[" + index + "]";
+            values.put(prefix + ".name", input.name());
+            values.put(prefix + ".javaType", input.javaType());
+            values.put(prefix + ".role", input.role().name());
+            values.put(prefix + ".implicit", Boolean.toString(input.implicit()));
+            values.put(prefix + ".nullability", input.nullability().name());
+            values.put(prefix + ".description", input.description());
+        }
+        values.put("operation.outcomeCount", Integer.toString(operation.outcomes().size()));
+        for (int index = 0; index < operation.outcomes().size(); index++) {
+            OperationOutcome outcome = operation.outcomes().get(index);
+            String prefix = "operation.outcome[" + index + "]";
+            values.put(prefix + ".kind", outcome.kind().name());
+            values.put(prefix + ".name", outcome.name());
+            values.put(prefix + ".javaType", outcome.javaType());
+            values.put(prefix + ".condition", outcome.condition());
+            values.put(prefix + ".description", outcome.description());
+        }
+        values.put("operation.failureCount", Integer.toString(operation.failures().size()));
+        for (int index = 0; index < operation.failures().size(); index++) {
+            OperationFailure failure = operation.failures().get(index);
+            String prefix = "operation.failure[" + index + "]";
+            values.put(prefix + ".exceptionType", failure.exceptionType());
+            values.put(prefix + ".condition", failure.condition());
+            values.put(prefix + ".description", failure.description());
+        }
+    }
+
+    private static void addConditionProperties(
+            Map<String, String> values,
+            String prefix,
+            io.github.vicliu624.explicitarchitecture.atlas.domain.ConditionExpression condition) {
+        values.put(prefix + ".canonicalForm", condition.canonicalForm());
+        values.put(prefix + ".status", condition.status().name());
+        for (int index = 0; index < condition.terms().size(); index++) {
+            var term = condition.terms().get(index);
+            String termPrefix = prefix + ".term[" + index + "]";
+            values.put(termPrefix + ".kind", term.kind());
+            values.put(termPrefix + ".subject", term.subject());
+            values.put(termPrefix + ".operator", term.operator());
+            values.put(termPrefix + ".expectedValue", term.expectedValue());
+        }
+    }
+
+    private static void addList(Map<String, String> values, String prefix, List<String> entries) {
+        values.put(prefix + "Count", Integer.toString(entries.size()));
+        for (int index = 0; index < entries.size(); index++) {
+            values.put(prefix + "[" + index + "]", entries.get(index));
+        }
     }
 
     private static String textAttribute(Map<String, AtlasValue> attributes, String name) {
@@ -412,6 +664,13 @@ public final class DefaultAtlasRoleViewQuery implements AtlasRoleViewQueryUseCas
             case DataTarget target -> target.targetKind().name();
             case CodeElement code -> code.qualifiedName();
             case ExternalBoundary boundary -> boundary.responsibility();
+            case SemanticValue value -> value.category().name() + ": " + value.javaRepresentation();
+            case OperationContract operation -> operation.javaSignature();
+            case ComponentDefinition component -> component.beanName() + ": " + component.candidateType();
+            case InjectionPoint injection -> injection.requestedType();
+            case ConfigurationProperty property -> property.propertyKey();
+            case ConfigurationScenario scenario -> "context=" + scenario.applicationContext().contextId()
+                    + "; profiles=" + String.join(",", scenario.activeProfiles());
             default -> asset.name();
         };
     }
@@ -471,6 +730,14 @@ public final class DefaultAtlasRoleViewQuery implements AtlasRoleViewQueryUseCas
     }
 
     private enum Role { BUSINESS, OPS, EXPERT }
+
+    private record ExecutionTransition(AtlasRelation relation, AtlasId targetId, String direction) {
+        private ExecutionTransition {
+            Objects.requireNonNull(relation, "relation 不能为空");
+            Objects.requireNonNull(targetId, "targetId 不能为空");
+            direction = Objects.requireNonNull(direction, "direction 不能为空");
+        }
+    }
 
     private static final class Index {
 

@@ -66,6 +66,29 @@ class AtlasJdkHttpServerTest {
             assertEquals(200, response.statusCode());
             assertTrue(response.body().contains("\"status\":\"UP\""));
             assertEquals("nosniff", response.headers().firstValue("X-Content-Type-Options").orElseThrow());
+
+            HttpResponse<String> loopbackBrowser = HttpClient.newHttpClient().send(
+                    HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + server.port() + "/health"))
+                            .header("Origin", "http://127.0.0.1:4173")
+                            .GET().build(),
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            assertEquals("http://127.0.0.1:4173", loopbackBrowser.headers()
+                    .firstValue("Access-Control-Allow-Origin").orElseThrow());
+
+            HttpResponse<String> ipv6LoopbackBrowser = HttpClient.newHttpClient().send(
+                    HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + server.port() + "/health"))
+                            .header("Origin", "http://[::1]:4173")
+                            .GET().build(),
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            assertEquals("http://[::1]:4173", ipv6LoopbackBrowser.headers()
+                    .firstValue("Access-Control-Allow-Origin").orElseThrow());
+
+            HttpResponse<String> externalBrowser = HttpClient.newHttpClient().send(
+                    HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + server.port() + "/health"))
+                            .header("Origin", "https://untrusted.example")
+                            .GET().build(),
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            assertTrue(externalBrowser.headers().firstValue("Access-Control-Allow-Origin").isEmpty());
         }
     }
 
@@ -91,6 +114,39 @@ class AtlasJdkHttpServerTest {
         AtlasPackageQueryUseCase ambiguousPackages = id -> id.equals(ambiguous.manifest().packageId()) ? Optional.of(ambiguous) : Optional.empty();
         var ambiguousQuery = new WorkspaceBackedExpertSourceHttpQuery(ambiguousPackages, new SourceArchiveReader(), List.of(archive));
         assertTrue(ambiguousQuery.findSource(ambiguous.manifest().packageId(), AtlasId.of("projection:orders")).isEmpty());
+    }
+
+    @Test
+    void readsAPackageKnownProjectJavaFileWithoutRequiringASourceJar() throws Exception {
+        AtlasPackage atlasPackage = sourcePackage();
+        Path project = workspace.resolve("project");
+        Path sourceFile = project.resolve("src/main/java/example/OrderProjection.java");
+        java.nio.file.Files.createDirectories(sourceFile.getParent());
+        java.nio.file.Files.writeString(sourceFile, "package example; final class OrderProjection { String state; }");
+        AtlasPackageQueryUseCase packages = id -> id.equals(atlasPackage.manifest().packageId()) ? Optional.of(atlasPackage) : Optional.empty();
+        var query = new WorkspaceBackedExpertSourceHttpQuery(packages, project, new SourceArchiveReader(), List.of());
+
+        var source = query.findSource(atlasPackage.manifest().packageId(), AtlasId.of("projection:orders")).orElseThrow();
+
+        assertEquals("src/main/java/example/OrderProjection.java", source.archiveEntry());
+        assertTrue(source.content().contains("String state"));
+        assertTrue(query.findSource(atlasPackage.manifest().packageId(), AtlasId.of("missing:asset")).isEmpty());
+    }
+
+    @Test
+    void cachesTheImmutablePackageAcrossIndependentExpertQueries() {
+        AtlasPackage atlasPackage = sourcePackage();
+        java.util.concurrent.atomic.AtomicInteger reads = new java.util.concurrent.atomic.AtomicInteger();
+        AtlasPackageQueryUseCase delegate = id -> {
+            reads.incrementAndGet();
+            return id.equals(atlasPackage.manifest().packageId()) ? Optional.of(atlasPackage) : Optional.empty();
+        };
+        CachingAtlasPackageQuery query = new CachingAtlasPackageQuery(delegate);
+
+        assertTrue(query.findById(atlasPackage.manifest().packageId()).isPresent());
+        assertTrue(query.findById(atlasPackage.manifest().packageId()).isPresent());
+
+        assertEquals(1, reads.get());
     }
 
     @Test
