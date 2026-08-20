@@ -44,7 +44,7 @@ flowchart LR
 ```powershell
 mvn -B verify
 
-java -jar infra-driving/atlas-cli/target/explicit-architecture-atlas-cli-0.1.0-SNAPSHOT-all.jar extract `
+java -jar infra-driving/atlas-cli/target/explicit-architecture-atlas-cli-0.0.1.jar extract `
   --workspace workspace/local/atlas-workspace.yaml `
   --package-id package:my-project:2026-08-04 `
   --source-revision working-tree
@@ -53,7 +53,7 @@ java -jar infra-driving/atlas-cli/target/explicit-architecture-atlas-cli-0.1.0-S
 之后启动本地查询服务和 Web：
 
 ```powershell
-java -jar ui-layer/atlas-server-bootstrap/target/explicit-architecture-atlas-server-bootstrap-0.1.0-SNAPSHOT-runner.jar `
+java -jar ui-layer/atlas-server-bootstrap/target/explicit-architecture-atlas-server-bootstrap-0.0.1.jar `
   --workspace workspace/local/atlas-workspace.yaml --port 8080
 
 npm --prefix ui-layer/atlas-web run dev

@@ -33,8 +33,9 @@
                         <phase>package</phase>
                         <goals><goal>shade</goal></goals>
                         <configuration>
-                            <shadedArtifactAttached>true</shadedArtifactAttached>
-                            <shadedClassifierName>all</shadedClassifierName>
+                            <!-- 发布的主工件必须是可直接执行的 fat JAR，避免额外 classifier
+                                 作为没有对应 sources/Javadocs 的第二个公共 JAR。 -->
+                            <shadedArtifactAttached>false</shadedArtifactAttached>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
                             <transformers>
                                 <!-- 多个 analyzer/provider 都通过 SPI 发布；不合并服务描述文件会让 fat jar 随机丢失 adapter。 -->

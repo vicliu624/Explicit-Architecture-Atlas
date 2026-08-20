@@ -31,7 +31,7 @@ flowchart LR
 
 ```powershell
 & 'C:\Program Files\Java\jdk-22\bin\java.exe' -jar `
-  .\ui-layer\atlas-server-bootstrap\target\explicit-architecture-atlas-server-bootstrap-0.1.0-SNAPSHOT-runner.jar `
+  .\ui-layer\atlas-server-bootstrap\target\explicit-architecture-atlas-server-bootstrap-0.0.1.jar `
   --workspace .\workspace\local\atlas-workspace.yaml `
   --port 8080
 ```
@@ -44,7 +44,7 @@ flowchart LR
 
 ```powershell
 & 'C:\Program Files\Java\jdk-22\bin\java.exe' -jar `
-  .\ui-layer\atlas-server-bootstrap\target\explicit-architecture-atlas-server-bootstrap-0.1.0-SNAPSHOT-runner.jar `
+  .\ui-layer\atlas-server-bootstrap\target\explicit-architecture-atlas-server-bootstrap-0.0.1.jar `
   --workspace .\workspace\local\atlas-workspace.yaml `
   --enable-expert-source
 ```

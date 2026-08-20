@@ -1,6 +1,6 @@
 {
   "name": "@explicit-architecture-atlas/web",
-  "version": "0.1.0-SNAPSHOT",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "description": "Explicit Architecture Atlas 的独立角色化渲染界面。",

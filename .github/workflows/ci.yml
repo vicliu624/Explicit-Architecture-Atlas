@@ -1,14 +1,26 @@
-name: Verify
+name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
+    name: Build, test, and validate repository boundaries
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -17,8 +29,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Verify Maven Reactor
-        run: mvn -B verify
+      - name: Verify Maven reactor
+        run: mvn -B -ntp -Prelease clean verify
       - name: Verify web shell syntax
         run: npm --prefix ui-layer/atlas-web run check
       - name: Verify repository structure

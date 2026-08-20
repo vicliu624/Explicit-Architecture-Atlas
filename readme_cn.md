@@ -8,6 +8,47 @@ Explicit Architecture Atlas（以下简称 **Atlas**）是一个将 Explicit Arc
 
 Atlas 不绑定任何特定业务仓库、行业或实现项目。它面向所有严格遵循 Explicit Architecture 的系统：只要系统能够清晰地区分领域核心、应用用例、主动适配器、被动适配器、事件、投影与流程协调，Atlas 就能够将其架构资产转换为面向不同角色的可读知识界面。
 
+## 0.0.1 发布与 Maven 使用
+
+`0.0.1` 是首个正式发布版本。所有公开 Java 模块由带 `v<version>` tag 的 GitHub Actions 发布到 GitHub Packages Maven Registry：
+
+```xml
+<repository>
+    <id>github</id>
+    <url>https://maven.pkg.github.com/vicliu624/Explicit-Architecture-Atlas</url>
+</repository>
+```
+
+GitHub Packages 的 Maven Registry 即使下载公开工件也需要 classic Personal Access Token；请创建只带 `read:packages` 权限的 token，并在本机 `~/.m2/settings.xml` 中以 `github` server ID 配置，绝不能提交 token：
+
+```xml
+<server>
+    <id>github</id>
+    <username>YOUR_GITHUB_USERNAME</username>
+    <password>${env.GITHUB_PACKAGES_TOKEN}</password>
+</server>
+```
+
+随后可导入 BOM：
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>io.github.vicliu624.explicitarchitecture</groupId>
+            <artifactId>explicit-architecture-atlas-bom</artifactId>
+            <version>0.0.1</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+
+完整发布说明见 [deploy/README.md](deploy/README.md)，每个版本的变更见 [CHANGELOG.md](CHANGELOG.md)。项目以 [Apache-2.0](LICENSE) 开源；参与方式和安全漏洞报告方式分别见 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [SECURITY.md](SECURITY.md)。
+
+工程也已具备 Maven Central 所需的 POM 元数据、源码/Javadoc 附件、签名与 Portal bundle 配置入口；但 Central 发布刻意保持为受保护环境下的手动操作，必须先完成 `io.github.vicliu624` 命名空间验证、Central token 和 PGP 主密钥配置。请先阅读 [deploy/README.md](deploy/README.md) 中的 Central 章节，再运行 `Publish to Maven Central` 工作流。
+
 ## 工程实施与文档
 
 当前仓库已经落下可执行的 Maven Reactor 工程：领域模型、应用 API/Core、分析 SPI、JVM/Maven/Spring/Axon/JPA 适配器、Axon 运行态入口、源码归档读取器、注解 API、编译处理器、Maven Plugin、CLI、HTTP 边界与服务组合根均有独立模块。JPA 适配器已经能把实体、显式表/列、Spring Data Repository 与投影的写入调用归一为可追溯的 `Projection → Entity → Table` 关系；Runtime Overlay 则能将私有、脱敏的 Axon 离线观测确定性关联至投影或 Process Manager，明确展示成功、失败、延迟、重试或“未采集到”的未知状态。角色化查询 API 进一步把同一 Package 输出为业务、运维和专家三种稳定读取模型，并可由本地 HTTP runner 提供 JSON；专家源码须显式启用且只从 Workspace 声明的 source JAR 按已知资产读取。通用 fixture 会在编译期生成 `atlas-intent.json`，CI 同时校验 Maven、独立 Web 与目录边界。

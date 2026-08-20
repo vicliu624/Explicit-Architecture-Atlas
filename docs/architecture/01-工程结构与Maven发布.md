@@ -86,7 +86,7 @@ Explicit-Architecture-Atlas/
 
 ```xml
 <groupId>io.github.vicliu624.explicitarchitecture</groupId>
-<version>0.1.0-SNAPSHOT</version>
+<version>0.0.1</version>
 ```
 
 各工件使用 `explicit-architecture-atlas-` 前缀，例如 `explicit-architecture-atlas-domain-model`。这一命名避免与被分析项目的领域模块混淆，并使 Maven 搜索结果可识别。

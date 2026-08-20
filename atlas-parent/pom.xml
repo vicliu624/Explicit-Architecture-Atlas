@@ -9,6 +9,45 @@
     <version>0.0.1</version>
     <packaging>pom</packaging>
     <name>Explicit Architecture Atlas :: Parent</name>
+    <description>Parent POM for Explicit Architecture Atlas, an evidence-based Java implementation explainer.</description>
+    <url>https://github.com/vicliu624/Explicit-Architecture-Atlas</url>
+
+    <licenses>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>vicliu624</id>
+            <name>Liu Weikai</name>
+            <email>vicliu@outlook.com</email>
+            <url>https://github.com/vicliu624</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/vicliu624/Explicit-Architecture-Atlas.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/vicliu624/Explicit-Architecture-Atlas.git</developerConnection>
+        <url>https://github.com/vicliu624/Explicit-Architecture-Atlas</url>
+        <tag>v${project.version}</tag>
+    </scm>
+
+    <issueManagement>
+        <system>GitHub Issues</system>
+        <url>https://github.com/vicliu624/Explicit-Architecture-Atlas/issues</url>
+    </issueManagement>
+
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/vicliu624/Explicit-Architecture-Atlas</url>
+        </repository>
+    </distributionManagement>
 
     <properties>
         <java.version>21</java.version>
@@ -21,6 +60,8 @@
         <maven.source.plugin.version>3.3.1</maven.source.plugin.version>
         <maven.javadoc.plugin.version>3.11.2</maven.javadoc.plugin.version>
         <maven.enforcer.plugin.version>3.5.0</maven.enforcer.plugin.version>
+        <maven.gpg.plugin.version>3.2.8</maven.gpg.plugin.version>
+        <central.publishing.plugin.version>0.9.0</central.publishing.plugin.version>
     </properties>
 
     <build>
@@ -94,6 +135,28 @@
                 <plugins>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-enforcer-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>enforce-release-inputs</id>
+                                <phase>validate</phase>
+                                <goals><goal>enforce</goal></goals>
+                                <configuration>
+                                    <rules>
+                                        <requireReleaseVersion>
+                                            <message>Release publication must use a non-SNAPSHOT project version.</message>
+                                        </requireReleaseVersion>
+                                        <requireReleaseDeps>
+                                            <onlyWhenRelease>false</onlyWhenRelease>
+                                            <message>Release publication cannot contain SNAPSHOT dependencies.</message>
+                                        </requireReleaseDeps>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-source-plugin</artifactId>
                         <executions>
                             <execution>
@@ -111,6 +174,63 @@
                                 <goals><goal>jar</goal></goals>
                             </execution>
                         </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>central-release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-enforcer-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>enforce-central-release-inputs</id>
+                                <phase>validate</phase>
+                                <goals><goal>enforce</goal></goals>
+                                <configuration>
+                                    <rules>
+                                        <requireReleaseVersion>
+                                            <message>Maven Central releases must use a non-SNAPSHOT project version.</message>
+                                        </requireReleaseVersion>
+                                        <requireReleaseDeps>
+                                            <onlyWhenRelease>false</onlyWhenRelease>
+                                            <message>Maven Central releases cannot contain SNAPSHOT dependencies.</message>
+                                        </requireReleaseDeps>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven.gpg.plugin.version}</version>
+                        <configuration>
+                            <bestPractices>true</bestPractices>
+                            <useAgent>false</useAgent>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>sign-central-artifacts</id>
+                                <phase>verify</phase>
+                                <goals><goal>sign</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>${central.publishing.plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
+                            <checksums>all</checksums>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>

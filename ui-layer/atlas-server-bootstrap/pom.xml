@@ -25,8 +25,9 @@
                         <goals><goal>shade</goal></goals>
                         <configuration>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
-                            <shadedArtifactAttached>true</shadedArtifactAttached>
-                            <shadedClassifierName>runner</shadedClassifierName>
+                            <!-- 将可执行服务组合根作为唯一主工件发布，保持 Maven Central
+                                 对每个发布 JAR 均可追溯到 sources/Javadocs 的要求。 -->
+                            <shadedArtifactAttached>false</shadedArtifactAttached>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>io.github.vicliu624.explicitarchitecture.atlas.server.AtlasServerApplication</mainClass>
