@@ -29,6 +29,8 @@ https://maven.pkg.github.com/vicliu624/Explicit-Architecture-Atlas
 
 工作流要求 `contents: write` 和 `packages: write`，权限已经显式写在 YAML 中。CI 和 PR 不具备发布权限，普通提交也不能意外部署版本。
 
+若 tag 触发的发布已经成功上传 Maven 工件、但在随后解析验证或 GitHub Release 创建步骤失败，修复 workflow 后可以从 `main` 手动运行 `Release`，输入同一已有 tag。这个恢复入口只会重新校验 tag、在空本地仓库解析已发布工件并补建 GitHub Release，**不会再次执行 deploy**；不要强推 tag 或试图重发同一个不可变版本。
+
 ### 消费发布物
 
 GitHub Packages Maven Registry 对下载也要求 classic Personal Access Token。消费者应以环境变量保存仅有 `read:packages` 权限的 token：
