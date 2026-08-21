@@ -9,13 +9,17 @@ Atlas 的发布物分为两类：
 
 ## 0.0.1 起的 Maven 发布
 
-公开 Java 模块发布到 GitHub Packages 的 Maven Registry：
+`0.0.1` 已发布到 [Maven Central](https://search.maven.org/search?q=g%3Aio.github.vicliu624.explicitarchitecture)，这是普通 Java 消费者的默认渠道：无需在 POM 中声明额外 repository，也无需 token。GitHub Packages Maven Registry 仍保留为 GitHub 生态中的并行分发渠道，但不是使用 Central 坐标的前置条件。
+
+所有公开模块使用统一坐标前缀：
 
 ```text
-https://maven.pkg.github.com/vicliu624/Explicit-Architecture-Atlas
+groupId:    io.github.vicliu624.explicitarchitecture
+artifactId: explicit-architecture-atlas-<module>
+version:    0.0.1
 ```
 
-`atlas-parent` 的 `distributionManagement` 统一声明该地址，所有面向消费者的模块继承它。根 Reactor POM、fixture 和集成测试模块明确跳过部署；`release` Profile 为发布的 JAR 附加 source JAR 与 Javadoc JAR。
+根 Reactor POM、fixture 和集成测试模块明确跳过部署；`release` Profile 为发布的 JAR 附加 source JAR 与 Javadoc JAR。`atlas-parent` 的 `distributionManagement` 仍统一声明 GitHub Packages 地址，供 tag 驱动的 GitHub Packages 发布；Maven Central 由独立、受保护的 `central-release` Profile 上传 bundle。
 
 `explicit-architecture-atlas-cli-full` 的主工件就是可执行的 shaded JAR；不需要也不应猜测一个额外的 `all` classifier。`atlas-contract` 则以 schema 资源和包级 API 文档为公开契约，两者在发布时都带有对应的 sources/Javadocs。
 
@@ -31,7 +35,34 @@ https://maven.pkg.github.com/vicliu624/Explicit-Architecture-Atlas
 
 若 tag 触发的发布已经成功上传 Maven 工件、但在随后解析验证或 GitHub Release 创建步骤失败，修复 workflow 后可以从 `main` 手动运行 `Release`，输入同一已有 tag。这个恢复入口只会重新校验 tag、在空本地仓库解析已发布工件并补建 GitHub Release，**不会再次执行 deploy**；不要强推 tag 或试图重发同一个不可变版本。
 
-### 消费发布物
+### 从 Maven Central 消费
+
+普通消费者不需要 `<repositories>`、`settings.xml` 或 token。导入 BOM 后按需选择模块：
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>io.github.vicliu624.explicitarchitecture</groupId>
+            <artifactId>explicit-architecture-atlas-bom</artifactId>
+            <version>0.0.1</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <dependency>
+        <groupId>io.github.vicliu624.explicitarchitecture</groupId>
+        <artifactId>explicit-architecture-atlas-annotations</artifactId>
+    </dependency>
+</dependencies>
+```
+
+`explicit-architecture-atlas-annotations:0.0.1` 的 POM、主 JAR、source JAR、Javadoc JAR 与 PGP 签名均已发布。其他模块遵循相同的 groupId 和版本约定；选择模块时应遵守各自的依赖边界，而不是无差别引入 full starter。
+
+### 从 GitHub Packages 消费（可选）
 
 GitHub Packages Maven Registry 对下载也要求 classic Personal Access Token。消费者应以环境变量保存仅有 `read:packages` 权限的 token：
 
@@ -67,11 +98,11 @@ GitHub Packages Maven Registry 对下载也要求 classic Personal Access Token�
 </dependencyManagement>
 ```
 
-### Maven Central 的边界
+### Maven Central 的发布边界
 
-这不是把 GitHub Packages 伪称为 Maven Central。Central 与 GitHub Packages 是两个独立的发布目标：`0.0.1` 的实际发布目标是 GitHub Packages；Maven Central 已具备完整、但只有在凭据齐备时才能执行的受保护入口。
+GitHub Packages 与 Maven Central 是两个独立的发布目标。`0.0.1` 已成功发布到两者；普通消费者应优先使用 Maven Central。后续每个 Central 版本仍必须通过独立、受保护的发布流程，不能因为 GitHub Packages 中已有同版本而跳过签名、验证或审批。
 
-Central 前必须完成以下一次性准备：
+首次 Central 发布前必须完成以下一次性准备（`0.0.1` 已完成）：
 
 1. 使用 GitHub 身份登录 Central Portal，验证个人命名空间 `io.github.vicliu624`。本项目坐标 `io.github.vicliu624.explicitarchitecture` 是该命名空间的子空间；
 2. 创建并安全保存 Central Portal 的 publishing token（用户名和密码）；

@@ -10,6 +10,10 @@ The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - Preserved the Actions `GITHUB_TOKEN` for the clean GitHub Packages consumer-resolution check and added a safe manual recovery path that verifies an already deployed tag and creates its GitHub Release without attempting to republish immutable Maven artifacts.
 
+### Added
+
+- Published the immutable `0.0.1` Atlas module family to Maven Central under `io.github.vicliu624.explicitarchitecture`; Central consumers can now import the BOM or individual modules without configuring an additional repository or credentials.
+
 ## [0.0.1] - 2026-08-21
 
 ### Added
