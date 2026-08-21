@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "groupId": "io.github.vicliu624.explicitarchitecture",
+  "version": "0.0.1",
+  "artifacts": [
+    {
+      "artifactId": "explicit-architecture-atlas-parent",
+      "packaging": "pom",
+      "consumerModes": ["parent"],
+      "bomManaged": false,
+      "role": "Build baseline for projects that extend Atlas"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-bom",
+      "packaging": "pom",
+      "consumerModes": ["bom-import"],
+      "bomManaged": false,
+      "role": "Version alignment for ordinary Atlas dependencies"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-contract",
+      "packaging": "jar",
+      "consumerModes": ["dependency"],
+      "bomManaged": true,
+      "role": "Stable public contracts and schema resources"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-domain-model",
+      "packaging": "jar",
+      "consumerModes": ["dependency"],
+      "bomManaged": true,
+      "role": "JDK-only Atlas domain model"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-domain-testkit",
+      "packaging": "jar",
+      "consumerModes": ["test-dependency"],
+      "bomManaged": true,
+      "role": "Test support for Atlas domain model consumers"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-application-api",
+      "packaging": "jar",
+      "consumerModes": ["dependency"],
+      "bomManaged": true,
+      "role": "Application ports, workspace inputs, and role-view contracts"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-application-core",
+      "packaging": "jar",
+      "consumerModes": ["embedded-implementation"],
+      "bomManaged": true,
+      "role": "Reference implementation of Atlas application use cases"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-core",
+      "packaging": "jar",
+      "consumerModes": ["dependency", "starter-foundation"],
+      "bomManaged": true,
+      "role": "Stable embedded Atlas facade"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-analysis-spi",
+      "packaging": "jar",
+      "consumerModes": ["extension-spi"],
+      "bomManaged": true,
+      "role": "SPI for custom analyzers and providers"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-annotations",
+      "packaging": "jar",
+      "consumerModes": ["dependency"],
+      "bomManaged": true,
+      "role": "Runtime-light source annotations for explicit intent"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-annotation-processor",
+      "packaging": "jar",
+      "consumerModes": ["annotation-processor"],
+      "bomManaged": true,
+      "role": "Compile-time Intent Manifest generator"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-source-jvm",
+      "packaging": "jar",
+      "consumerModes": ["embedded-adapter", "plugin-adapter"],
+      "bomManaged": true,
+      "role": "Generic JVM source facts analyzer"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-maven-source",
+      "packaging": "jar",
+      "consumerModes": ["embedded-adapter", "plugin-adapter"],
+      "bomManaged": true,
+      "role": "Maven POM and dependency facts analyzer"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-spring-source",
+      "packaging": "jar",
+      "consumerModes": ["embedded-adapter", "plugin-adapter"],
+      "bomManaged": true,
+      "role": "Spring source, bean, condition, and endpoint analyzer"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-axon-source",
+      "packaging": "jar",
+      "consumerModes": ["embedded-adapter", "plugin-adapter"],
+      "bomManaged": true,
+      "role": "Axon source facts analyzer"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-axon-runtime",
+      "packaging": "jar",
+      "consumerModes": ["embedded-runtime"],
+      "bomManaged": true,
+      "role": "Optional Axon runtime observation overlay"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-jpa-target-resolver",
+      "packaging": "jar",
+      "consumerModes": ["embedded-adapter", "plugin-adapter"],
+      "bomManaged": true,
+      "role": "JPA persistence and projection target resolver"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-source-archive",
+      "packaging": "jar",
+      "consumerModes": ["embedded-infrastructure"],
+      "bomManaged": true,
+      "role": "Controlled source archive reader for expert source access"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-file-store",
+      "packaging": "jar",
+      "consumerModes": ["embedded-infrastructure"],
+      "bomManaged": true,
+      "role": "Local Workspace and Atlas Package file storage"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-content-store",
+      "packaging": "jar",
+      "consumerModes": ["embedded-infrastructure"],
+      "bomManaged": true,
+      "role": "Controlled narrative and content bundle storage"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-maven-plugin",
+      "packaging": "maven-plugin",
+      "consumerModes": ["maven-build-plugin"],
+      "bomManaged": false,
+      "role": "atlas:extract build-time package generator"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-cli",
+      "packaging": "jar",
+      "consumerModes": ["executable-distribution"],
+      "bomManaged": true,
+      "role": "Framework-neutral executable CLI distribution"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-cli-full",
+      "packaging": "jar",
+      "consumerModes": ["executable-distribution"],
+      "bomManaged": true,
+      "role": "All-adapter executable CLI distribution"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-starter-jvm",
+      "packaging": "jar",
+      "consumerModes": ["starter-dependency"],
+      "bomManaged": true,
+      "role": "Core plus generic JVM and Maven source analysis"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-starter-spring",
+      "packaging": "jar",
+      "consumerModes": ["starter-dependency"],
+      "bomManaged": true,
+      "role": "starter-jvm plus Spring source analysis"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-starter-axon",
+      "packaging": "jar",
+      "consumerModes": ["starter-dependency"],
+      "bomManaged": true,
+      "role": "starter-jvm plus Axon source and runtime capabilities"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-starter-jpa",
+      "packaging": "jar",
+      "consumerModes": ["starter-dependency"],
+      "bomManaged": true,
+      "role": "starter-jvm plus JPA target resolution"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-starter-full",
+      "packaging": "jar",
+      "consumerModes": ["starter-dependency"],
+      "bomManaged": true,
+      "role": "All focused starters for explicit full-adapter composition"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-http-api",
+      "packaging": "jar",
+      "consumerModes": ["http-boundary"],
+      "bomManaged": true,
+      "role": "Host-neutral Atlas HTTP routing and response boundary"
+    },
+    {
+      "artifactId": "explicit-architecture-atlas-server-bootstrap",
+      "packaging": "jar",
+      "consumerModes": ["executable-distribution"],
+      "bomManaged": true,
+      "role": "Ready-to-run local Atlas HTTP server composition"
+    }
+  ]
+}

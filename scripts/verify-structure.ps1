@@ -25,7 +25,10 @@ $requiredPaths = @(
     "ui-layer/atlas-web/package.json",
     "integration-test/fixture-projects/strict-explicit-java-sample/pom.xml",
     "workspace/atlas-workspace.example.yaml",
-    "docs/architecture/01-工程结构与Maven发布.md"
+    "docs/architecture/01-工程结构与Maven发布.md",
+    "docs/maven/consumer-catalog.json",
+    "docs/maven/01-Maven-Central-Consumer-Guide.md",
+    "scripts/verify-maven-consumer-catalog.ps1"
 )
 
 $missing = $requiredPaths | Where-Object {
@@ -118,5 +121,7 @@ foreach ($expectedArtifact in @(
         throw "BOM 未管理必要的可发布 JAR：$expectedArtifact"
     }
 }
+
+& (Join-Path $PSScriptRoot "verify-maven-consumer-catalog.ps1") -RepositoryRoot $repoRoot
 
 Write-Host "工程结构校验通过：$($modules.Count) 个 Maven Reactor 模块，Web 与 Workspace 边界均已存在。"

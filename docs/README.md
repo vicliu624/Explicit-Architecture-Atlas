@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | [中文 Wiki：从这里开始](wiki/README.md) | 所有使用者 | Atlas 是什么，如何第一次生成和阅读 Package，各角色应从哪里开始？ |
 | [工程结构与 Maven 发布](architecture/01-工程结构与Maven发布.md) | 架构师、发布维护者 | 哪些目录会发布为 Maven 工件，哪些不会？ |
+| [Maven Central 与 POM 完整使用手册](maven/01-Maven-Central-Consumer-Guide.md) | Maven 消费者、平台工程师 | 每一个已发布坐标应放在哪个 POM 区块，BOM、注解处理器、Plugin、Starter 和可执行分发物怎样选择？ |
 | [依赖规则与装配](architecture/02-依赖规则与装配.md) | 开发者、架构师 | 模块为何这样依赖，框架适配器放在哪里？ |
 | [数据包、Workspace 与隐私边界](architecture/03-数据包、Workspace与隐私边界.md) | 运维、部署维护者 | Atlas 数据如何进入系统，哪些内容禁止提交？ |
 | [运行态投影健康度与运维处置](operations/01-运行态投影健康度.md) | 运维、平台工程师 | 如何安全导入 Axon 观测，判断投影是否可见并采取行动？ |

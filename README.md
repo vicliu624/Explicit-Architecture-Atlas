@@ -39,7 +39,7 @@ Import the BOM and select the Atlas modules your project needs:
 </dependency>
 ```
 
-For a build-time integration, add `explicit-architecture-atlas-maven-plugin` as a Maven build plugin; for framework-aware extraction, select the corresponding Atlas adapter or starter. The complete module boundaries and examples are documented in [the publishing and consumption guide](deploy/README.md).
+For a build-time integration, add `explicit-architecture-atlas-maven-plugin` as a Maven build plugin; for framework-aware extraction, select the corresponding Atlas adapter or starter. The complete, CI-checked guide for all published coordinates, POM placement, annotation processing, Plugin dependencies, starters, CLI, and server distribution is [the Maven Central and POM consumer guide](docs/maven/01-Maven-Central-Consumer-Guide.md). Publishing operations remain in [the publishing guide](deploy/README.md).
 
 GitHub Packages remains a parallel package channel for GitHub-specific workflows, but it requires credentials and is not needed for normal Central consumers.
 
